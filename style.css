@@ -28,13 +28,12 @@ html, body {
   transition: filter 1.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Diorama Lens Vignette */
 .vignette-overlay {
   position: fixed;
   inset: 0;
   z-index: 2;
   pointer-events: none;
-  background: radial-gradient(circle at center, transparent 52%, rgba(8, 6, 14, 0.62) 100%);
+  background: radial-gradient(circle at center, transparent 54%, rgba(8, 6, 14, 0.58) 100%);
 }
 
 /* Title Flash */
@@ -286,7 +285,7 @@ html, body {
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 32px 28px;
-  max-width: 500px;
+  max-width: 480px;
   width: 100%;
   text-align: center;
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
@@ -295,43 +294,18 @@ html, body {
 .ending-card h2 {
   font-family: 'Cormorant Garamond', Georgia, serif;
   font-size: 2.5rem;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   background: linear-gradient(120deg, #fb7185, #fbbf24, #38bdf8);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.ending-quote { font-size: 0.92rem; color: #d6d3d1; margin-bottom: 18px; line-height: 1.55; font-style: italic; }
-
-.note-form { text-align: left; margin-bottom: 14px; }
-.note-form label { display: block; font-size: 0.78rem; color: #a8a29e; margin-bottom: 6px; }
-.note-input-row { display: flex; gap: 8px; }
-.note-input-row input {
-  flex: 1;
-  padding: 9px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
-  font-family: inherit;
-  font-size: 0.86rem;
-}
-
-.saved-notes { display: flex; flex-direction: column; gap: 6px; max-height: 92px; overflow-y: auto; margin-bottom: 18px; text-align: left; }
-.saved-note-item {
-  font-size: 0.78rem;
-  background: rgba(255, 255, 255, 0.06);
-  border-left: 3px solid var(--accent);
-  padding: 6px 10px;
-  border-radius: 6px;
-  color: #e7e5e4;
-}
+.ending-quote { font-size: 0.94rem; color: #d6d3d1; margin-bottom: 24px; line-height: 1.6; font-style: italic; }
 
 .ending-actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
-.btn { padding: 10px 18px; border-radius: 10px; font-family: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+.btn { padding: 10px 20px; border-radius: 10px; font-family: inherit; font-size: 0.88rem; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
 .btn-primary { background: #f43f5e; color: #fff; }
 .btn-secondary { background: rgba(255, 255, 255, 0.12); color: #fff; border-color: var(--border); }
-.btn-note { background: var(--gold); color: #0f172a; }
 
 .controls-hint {
   position: fixed;
