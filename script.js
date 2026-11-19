@@ -1,6 +1,6 @@
 /* =========================================================
-   FINDING JANE — Living Chibi Diorama Edition
-   Bustling Town + Instanced Grass + Water Physics + Forested Mountains + Sunset Beach
+   FINDING JANE — Humanoid Chibi-Anime Diorama Edition
+   Sculpted Human Characters + Bustling Town + Water Physics + Beach
 ========================================================= */
 
 const SEA_LEVEL = -0.25;
@@ -105,7 +105,7 @@ scene.fog = new THREE.FogExp2(0x2a1f36, 0.013);
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 360);
 
-const hemiLight = new THREE.HemisphereLight(0xa78bfa, 0x1c1917, 0.65);
+const hemiLight = new THREE.HemisphereLight(0xa78bfa, 0x1c1917, 0.68);
 scene.add(hemiLight);
 
 const sunLight = new THREE.DirectionalLight(0xffb36b, 1.35);
@@ -231,7 +231,6 @@ function mountainTrailX(z) {
 
 function getTerrainHeight(x, z) {
   let h = 0;
-
   if (z < 18) {
     h = 0;
     const edge = Math.max(0, Math.abs(x) - 24);
@@ -309,7 +308,6 @@ const terrainMesh = new THREE.Mesh(terrainGeo, cozyMat(0xffffff, 0.92, { vertexC
 terrainMesh.receiveShadow = true;
 scene.add(terrainMesh);
 
-// Tiled Town Plaza
 const tiledPlaza = new THREE.Mesh(
   new THREE.CylinderGeometry(8.5, 8.6, 0.08, 36),
   cozyMat(0xffffff, 0.78, { map: tileTex })
@@ -318,7 +316,6 @@ tiledPlaza.position.set(0, 0.03, -4);
 tiledPlaza.receiveShadow = true;
 scene.add(tiledPlaza);
 
-// Cobblestone Main Street Path
 const mainRoad = new THREE.Mesh(
   new THREE.BoxGeometry(4.4, 0.06, 20),
   cozyMat(0xd6c0a1, 0.85, { map: tileTex })
@@ -327,7 +324,6 @@ mainRoad.position.set(0, 0.02, 7.5);
 mainRoad.receiveShadow = true;
 scene.add(mainRoad);
 
-// Animated Water Plane
 const waterGeo = new THREE.PlaneGeometry(140, 220, 42, 64);
 waterGeo.rotateX(-Math.PI / 2);
 waterGeo.translate(0, SEA_LEVEL, 105);
@@ -344,7 +340,7 @@ const waterMesh = new THREE.Mesh(
 waterMesh.receiveShadow = true;
 scene.add(waterMesh);
 
-/* 7. Water Physics Effects (Ripples, Splashes, River Foam, Shoreline Surge) */
+/* 7. Water Physics Visuals */
 const waterRipples = [];
 const waterSplashes = [];
 const riverFoamStreaks = [];
@@ -378,7 +374,6 @@ function spawnSplash(x, z, count = 10) {
   }
 }
 
-// River Rapid Foam Streaks (visualizes +X current!)
 for (let i = 0; i < 24; i++) {
   const streak = new THREE.Mesh(
     new THREE.BoxGeometry(1.6 + Math.random() * 1.4, 0.04, 0.18),
@@ -389,7 +384,6 @@ for (let i = 0; i < 24; i++) {
   riverFoamStreaks.push({ mesh: streak, speed: 2.2 + Math.random() * 1.4 });
 }
 
-// Shoreline Foam Strip at Sunset Beach (Z = 164.5)
 const shoreFoam = new THREE.Mesh(
   new THREE.PlaneGeometry(76, 1.8),
   new THREE.MeshBasicMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
@@ -398,7 +392,7 @@ shoreFoam.rotation.x = -Math.PI / 2;
 shoreFoam.position.set(0, SEA_LEVEL + 0.12, 164.5);
 scene.add(shoreFoam);
 
-/* 8. Dense Town, Mountain Forest, Instanced Grass & Sunset Beach Props */
+/* 8. Dense Town, Mountain Forest, Instanced Grass & Sunset Beach */
 const colliders = [];
 const platforms = [];
 const boxPlatforms = [];
@@ -420,21 +414,14 @@ function addPlatformRock(x, z, y, r = 1.7) {
 function createDioramaCottage(x, z, wallColor, roofColor, rotY = 0, w = 5.8, h = 4.4, d = 4.8) {
   const g = new THREE.Group();
   const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cozyMat(wallColor, 0.85, { map: woodTex }));
-  base.position.y = h / 2;
-  base.castShadow = true;
-  base.receiveShadow = true;
+  base.position.y = h / 2; base.castShadow = true; base.receiveShadow = true;
 
   const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.82, 2.8, 4), cozyMat(roofColor, 0.88));
-  roof.position.y = h + 1.4;
-  roof.rotation.y = Math.PI / 4;
-  roof.castShadow = true;
+  roof.position.y = h + 1.4; roof.rotation.y = Math.PI / 4; roof.castShadow = true;
 
-  // Chimney
   const chim = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.7), cozyMat(0x57534e, 0.9));
-  chim.position.set(w * 0.25, h + 1.6, -d * 0.15);
-  chim.castShadow = true;
+  chim.position.set(w * 0.25, h + 1.6, -d * 0.15); chim.castShadow = true;
 
-  // Glowing Cozy Windows + Door
   const win1 = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.2), new THREE.MeshBasicMaterial({ color: 0xfde68a }));
   win1.position.set(-w * 0.22, h * 0.52, d / 2 + 0.02);
   const win2 = win1.clone();
@@ -448,14 +435,11 @@ function createDioramaCottage(x, z, wallColor, roofColor, rotY = 0, w = 5.8, h =
   scene.add(g);
   colliders.push({ x, z, r: Math.max(w, d) * 0.58 });
 
-  // Chimney smoke puff
   const smoke = new THREE.Mesh(
     new THREE.SphereGeometry(0.32, 6, 6),
     new THREE.MeshBasicMaterial({ color: 0xe7e5e4, transparent: true, opacity: 0.45 })
   );
-  const worldChimX = x + Math.cos(rotY) * (w * 0.25);
-  const worldChimZ = z - Math.sin(rotY) * (w * 0.25);
-  smoke.position.set(worldChimX, h + 2.7, worldChimZ);
+  smoke.position.set(x + Math.cos(rotY) * (w * 0.25), h + 2.7, z - Math.sin(rotY) * (w * 0.25));
   scene.add(smoke);
   chimneySmokes.push({ mesh: smoke, baseY: h + 2.7, offset: Math.random() * 10 });
 }
@@ -463,8 +447,7 @@ function createDioramaCottage(x, z, wallColor, roofColor, rotY = 0, w = 5.8, h =
 function createStylizedTree(x, z, type = "sakura", scale = 1) {
   const g = new THREE.Group();
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.5, 3.4, 8), cozyMat(0x4a2c18, 0.92));
-  trunk.position.y = 1.7;
-  trunk.castShadow = true;
+  trunk.position.y = 1.7; trunk.castShadow = true;
 
   if (type === "pine") {
     const c1 = new THREE.Mesh(new THREE.ConeGeometry(2.1, 3.2, 7), cozyMat(0x2d5a43, 0.88));
@@ -479,7 +462,6 @@ function createStylizedTree(x, z, type = "sakura", scale = 1) {
     c2.position.set(1.0, 3.4, 0.5); c2.castShadow = true;
     g.add(trunk, c1, c2);
   }
-
   g.scale.setScalar(scale);
   g.position.set(x, getTerrainHeight(x, z), z);
   scene.add(g);
@@ -529,8 +511,7 @@ function createPalmTree(x, z) {
   for (let i = 0; i < 5; i++) {
     const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.2 - i * 0.02, 0.25 - i * 0.02, 1.1, 7), cozyMat(0x78350f, 0.9));
     seg.position.set(Math.sin(i * 0.25) * 0.35, 0.55 + i * 0.95, 0);
-    seg.rotation.z = -0.08 * i;
-    seg.castShadow = true;
+    seg.rotation.z = -0.08 * i; seg.castShadow = true;
     g.add(seg);
   }
   const crown = new THREE.Group();
@@ -550,7 +531,7 @@ function createPalmTree(x, z) {
   colliders.push({ x, z, r: 0.7 });
 }
 
-// FULL DIORAMA TOWN (10 Houses & Shops + Benches + Crates + Lamps)
+// Town Buildings, Benches, Stalls & Lanterns
 createDioramaCottage(-15, -13, 0xd6b89c, 0x9f1239, 0.45);
 createDioramaCottage(15, -13, 0xcbd5e1, 0x3730a3, -0.45);
 createDioramaCottage(-16, -2, 0xe7d4c0, 0xbe123c, 1.25, 5.2, 4.0, 4.4);
@@ -572,7 +553,6 @@ createLanternPost(6.5, -1, false);
 createLanternPost(-2.8, 16.2, false);
 createLanternPost(2.8, 16.2, false);
 
-// Sora's Flower Stall
 const stall = new THREE.Group();
 const counter = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.4, 1.6), cozyMat(0xb45309, 0.85, { map: woodTex }));
 counter.position.y = 0.7; counter.castShadow = true;
@@ -585,7 +565,6 @@ scene.add(stall);
 colliders.push({ x: -9.5, z: -4.5, r: 2.1 });
 createLanternPost(-7.5, -5.5, true);
 
-// Second Bakery Stall on East Plaza
 const bakery = new THREE.Group();
 const bCounter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.3, 1.5), cozyMat(0x92400e, 0.85, { map: woodTex }));
 bCounter.position.y = 0.65; bCounter.castShadow = true;
@@ -597,7 +576,7 @@ bakery.rotation.y = -Math.PI / 3;
 scene.add(bakery);
 colliders.push({ x: 9.5, z: -4.5, r: 2.0 });
 
-// Broken Bridge Piers (Walkable planks!)
+// Walkable Broken Bridge Piers
 [18, 38].forEach((bz) => {
   const pier = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.6, 2.4), cozyMat(0x78350f, 0.9, { map: woodTex }));
   pier.position.set(0, 0.2, bz);
@@ -607,18 +586,15 @@ colliders.push({ x: 9.5, z: -4.5, r: 2.0 });
   boxPlatforms.push({ x: 0, z: bz, y: 0.5, halfW: 2.2, halfD: 1.2 });
 });
 
-// River Stepping Stones + Scarf Island
 addPlatformRock(-1.6, 22.0, 0.1, 1.5);
 addPlatformRock(1.4, 25.5, 0.1, 1.5);
 addPlatformRock(-5.8, 28.0, 0.25, 2.1);
 addPlatformRock(0.8, 30.5, 0.1, 1.5);
 addPlatformRock(-1.2, 34.5, 0.1, 1.5);
 
-// East Cliff Overlook Ledge for Sky Key
 const keyCliffY = getTerrainHeight(10.5, 59) + 0.8;
 addPlatformRock(14.2, 59, keyCliffY, 2.5);
 
-// Summit Torii Gate & Barrier
 const summitY = getTerrainHeight(0, 76);
 const gateGroup = new THREE.Group();
 const toriiL = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 4.8), cozyMat(0xbe123c, 0.8, { map: woodTex }));
@@ -640,7 +616,7 @@ const summitLight = new THREE.PointLight(0xfbbf24, 1.4, 18);
 summitLight.position.set(0, summitY + 4, 76);
 scene.add(summitLight);
 
-// DENSE MOUNTAIN FOREST (38 Alpine Pine & Sakura Trees framing the climb!)
+// Mountain Forest (38 trees)
 for (let i = 0; i < 38; i++) {
   const mz = 43 + (i / 38) * 65;
   const side = i % 2 === 0 ? 1 : -1;
@@ -651,26 +627,22 @@ for (let i = 0; i < 38; i++) {
   createStylizedTree(mx, mz, i % 4 === 0 ? "sakura" : "pine", 0.85 + (i % 3) * 0.22);
 }
 
-// Town Perimeter Trees
 [[-11, -15, "sakura"], [11, -15, "sakura"], [-9, 13, "pine"], [9, 13, "sakura"]].forEach(([x, z, t]) =>
   createStylizedTree(x, z, t)
 );
 
-// SUNSET BEACH PROPS (Palms, Wooden Pier, Bonfire, Boat, Umbrella & Shells!)
+// Beach Props
 createPalmTree(-12, 155);
 createPalmTree(13, 156);
 createPalmTree(-17, 159);
 createPalmTree(18, 158);
 
-// Walkable Beach Wooden Pier extending over the ocean waves!
 const beachPier = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.35, 9.0), cozyMat(0x78350f, 0.88, { map: woodTex }));
 beachPier.position.set(-8.5, 0.5, 162);
-beachPier.castShadow = true;
-beachPier.receiveShadow = true;
+beachPier.castShadow = true; beachPier.receiveShadow = true;
 scene.add(beachPier);
 boxPlatforms.push({ x: -8.5, z: 162, y: 0.68, halfW: 1.6, halfD: 4.5 });
 
-// Beached Wooden Rowboat
 const boat = new THREE.Group();
 const hull = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.65, 4.4), cozyMat(0x92400e, 0.85, { map: woodTex }));
 hull.castShadow = true;
@@ -682,7 +654,6 @@ boat.rotation.set(0.08, -0.45, 0.12);
 scene.add(boat);
 colliders.push({ x: 9.5, z: 159, r: 2.0 });
 
-// Beach Umbrella & Lounge Chair
 const umbrellaGroup = new THREE.Group();
 const uPole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.8), cozyMat(0xe2e8f0));
 uPole.position.y = 1.4;
@@ -692,7 +663,6 @@ umbrellaGroup.add(uPole, uTop);
 umbrellaGroup.position.set(5.5, getTerrainHeight(5.5, 155), 155);
 scene.add(umbrellaGroup);
 
-// Cozy Beach Bonfire + Sparks
 const firePos = { x: -2.8, z: 157.5, y: getTerrainHeight(-2.8, 157.5) };
 for (let i = 0; i < 6; i++) {
   const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.24), cozyMat(0x57534e));
@@ -713,23 +683,22 @@ for (let i = 0; i < 14; i++) {
   bonfireSparks.push({ mesh: sp, speed: 0.7 + Math.random() * 0.9, phase: Math.random() * 6 });
 }
 
-// INSTANCED GRASS (1,050 grass blades in 1 draw call!)
+// Instanced Grass
 const grassPositions = [];
 for (let i = 0; i < 1400; i++) {
   const gx = (Math.random() - 0.5) * 76;
   const gz = -22 + Math.random() * 130;
   const gy = getTerrainHeight(gx, gz);
-  if (gy < 0.15) continue; // Not in water
-  if (gz < 16 && Math.hypot(gx, gz + 4) < 9.0) continue; // Keep plaza clear
-  if (gz < 18 && Math.abs(gx) < 2.8) continue; // Keep road clear
-  if (gz >= 40 && Math.abs(gx - mountainTrailX(gz)) < 3.8) continue; // Keep mountain trail clear
+  if (gy < 0.15) continue;
+  if (gz < 16 && Math.hypot(gx, gz + 4) < 9.0) continue;
+  if (gz < 18 && Math.abs(gx) < 2.8) continue;
+  if (gz >= 40 && Math.abs(gx - mountainTrailX(gz)) < 3.8) continue;
   grassPositions.push({ x: gx, y: gy, z: gz });
 }
 
 const grassGeo = new THREE.ConeGeometry(0.14, 0.62, 4);
 grassGeo.translate(0, 0.31, 0);
-const grassMat = cozyMat(0xffffff, 0.9);
-const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassPositions.length);
+const grassMesh = new THREE.InstancedMesh(grassGeo, cozyMat(0xffffff, 0.9), grassPositions.length);
 grassMesh.receiveShadow = true;
 
 const dummy = new THREE.Object3D();
@@ -747,7 +716,6 @@ grassMesh.instanceMatrix.needsUpdate = true;
 if (grassMesh.instanceColor) grassMesh.instanceColor.needsUpdate = true;
 scene.add(grassMesh);
 
-// Floating Dust Motes
 const dustCount = 160;
 const dustGeo = new THREE.BufferGeometry();
 const dustPos = new Float32Array(dustCount * 3);
@@ -763,64 +731,227 @@ const dustSystem = new THREE.Points(
 );
 scene.add(dustSystem);
 
-/* 9. Chibi Characters + Lively Townspeople */
-function createChibiCharacter({ coat, hair, skin = 0xffe0c4, scarf = 0xf43f5e }) {
+/* 9. Articulated 3D Human Character Builder (Lathe Torso, Jointed Limbs, Sculpted Hair) */
+function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x1c1917, skin = 0xffe0c4, scarf = 0xf43f5e, isFemale = false }) {
   const g = new THREE.Group();
-  const legGeo = new THREE.CylinderGeometry(0.11, 0.13, 0.52, 8);
-  legGeo.translate(0, -0.26, 0);
-  const bootMat = cozyMat(0x1c1917, 0.8);
+  const skinMat = cozyMat(skin, 0.72);
+  const topMat = cozyMat(topColor, 0.76);
+  const pantMat = cozyMat(bottomColor, 0.85);
+  const shoeMat = cozyMat(0x27272a, 0.7);
+  const hairMat = cozyMat(hairColor, 0.82);
 
-  const leftLeg = new THREE.Mesh(legGeo, bootMat);
-  leftLeg.position.set(-0.14, 0.52, 0); leftLeg.castShadow = true;
-  const rightLeg = new THREE.Mesh(legGeo, bootMat);
-  rightLeg.position.set(0.14, 0.52, 0); rightLeg.castShadow = true;
-  g.add(leftLeg, rightLeg);
+  // 1. Jointed Legs (Hip -> Thigh -> Knee -> Shin -> Sneaker)
+  const thighGeo = new THREE.CapsuleGeometry(0.086, 0.24, 6, 12);
+  thighGeo.translate(0, -0.20, 0);
+  const shinGeo = new THREE.CapsuleGeometry(0.072, 0.23, 6, 12);
+  shinGeo.translate(0, -0.19, 0);
+  const shoeGeo = new THREE.CapsuleGeometry(0.075, 0.12, 6, 10);
+  shoeGeo.rotateX(Math.PI / 2);
 
-  const coatMesh = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.85, 14), cozyMat(coat, 0.78));
-  coatMesh.position.y = 0.82; coatMesh.castShadow = true;
-  g.add(coatMesh);
+  function makeLeg(sideX) {
+    const hipGroup = new THREE.Group();
+    hipGroup.position.set(sideX, 0.82, 0);
 
-  const scarfM = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.085, 8, 16), cozyMat(scarf, 0.8));
-  scarfM.rotation.x = Math.PI / 2; scarfM.position.y = 1.18;
-  g.add(scarfM);
+    const thigh = new THREE.Mesh(thighGeo, isFemale ? skinMat : pantMat);
+    thigh.castShadow = true;
 
-  const armGeo = new THREE.CylinderGeometry(0.09, 0.12, 0.5, 8);
-  armGeo.translate(0, -0.22, 0);
-  const leftArm = new THREE.Mesh(armGeo, cozyMat(coat, 0.78));
-  leftArm.position.set(-0.34, 1.1, 0); leftArm.rotation.z = 0.2;
-  const rightArm = new THREE.Mesh(armGeo, cozyMat(coat, 0.78));
-  rightArm.position.set(0.34, 1.1, 0); rightArm.rotation.z = -0.2;
-  g.add(leftArm, rightArm);
+    const kneeGroup = new THREE.Group();
+    kneeGroup.position.set(0, -0.38, 0);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 20), cozyMat(skin, 0.7));
-  head.position.y = 1.56; head.castShadow = true;
-  g.add(head);
+    const shin = new THREE.Mesh(shinGeo, isFemale ? skinMat : pantMat);
+    shin.castShadow = true;
 
-  const hood = new THREE.Mesh(
-    new THREE.SphereGeometry(0.46, 18, 18, 0, Math.PI * 2, 0, Math.PI * 0.65),
-    cozyMat(coat, 0.78, { side: THREE.DoubleSide })
-  );
-  hood.position.set(0, 1.58, -0.04); hood.rotation.x = -0.55; hood.castShadow = true;
-  g.add(hood);
+    const shoe = new THREE.Mesh(shoeGeo, shoeMat);
+    shoe.position.set(0, -0.37, 0.05);
+    shoe.castShadow = true;
 
-  const hairBangs = new THREE.Mesh(
-    new THREE.SphereGeometry(0.435, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.42),
-    cozyMat(hair, 0.82)
-  );
-  hairBangs.position.set(0, 1.6, 0.03); hairBangs.rotation.x = 0.25;
-  g.add(hairBangs);
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.25), cozyMat(0xf8fafc, 0.8));
+    sole.position.set(0, -0.43, 0.05);
 
-  [-0.14, 0.14].forEach((ex) => {
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), new THREE.MeshBasicMaterial({ color: 0x1e1b4b }));
-    iris.scale.set(0.85, 1.2, 0.5); iris.position.set(ex, 1.52, 0.39);
-    const sparkle = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    sparkle.position.set(ex + 0.02, 1.55, 0.42);
-    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfda4af }));
-    blush.scale.set(1.3, 0.6, 0.3); blush.position.set(ex * 1.45, 1.43, 0.38);
-    g.add(iris, sparkle, blush);
+    kneeGroup.add(shin, shoe, sole);
+    hipGroup.add(thigh, kneeGroup);
+    return { hipGroup, kneeGroup };
+  }
+
+  const left = makeLeg(-0.125);
+  const right = makeLeg(0.125);
+  g.add(left.hipGroup, right.hipGroup);
+
+  // 2. Sculpted Human Torso via LatheGeometry (Waist, Chest, Shoulders, Coat/Skirt)
+  const profile = isFemale
+    ? [
+        new THREE.Vector2(0.01, 0.64),
+        new THREE.Vector2(0.28, 0.66),
+        new THREE.Vector2(0.22, 0.86),
+        new THREE.Vector2(0.16, 1.03), // Fitted waist
+        new THREE.Vector2(0.21, 1.22), // Chest
+        new THREE.Vector2(0.19, 1.35), // Shoulders
+        new THREE.Vector2(0.08, 1.39)  // Collar
+      ]
+    : [
+        new THREE.Vector2(0.01, 0.76),
+        new THREE.Vector2(0.22, 0.78),
+        new THREE.Vector2(0.19, 0.96), // Waist
+        new THREE.Vector2(0.24, 1.24), // Chest / Shoulders
+        new THREE.Vector2(0.22, 1.36),
+        new THREE.Vector2(0.09, 1.40)  // Collar
+      ];
+
+  const torsoGeo = new THREE.LatheGeometry(profile, 18);
+  const torso = new THREE.Mesh(torsoGeo, topMat);
+  torso.scale.set(1.08, 1, 0.75); // Natural human oval cross-section!
+  torso.castShadow = true;
+  g.add(torso);
+
+  // Cozy Scarf + Back Tail
+  const scarfRing = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.05, 8, 18), cozyMat(scarf, 0.8));
+  scarfRing.rotation.x = Math.PI / 2;
+  scarfRing.position.set(0, 1.39, 0.01);
+  const scarfTail = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.34, 0.04), cozyMat(scarf, 0.8));
+  scarfTail.position.set(0.06, 1.22, -0.17);
+  scarfTail.rotation.x = 0.16;
+  g.add(scarfRing, scarfTail);
+
+  // 3. Jointed Arms (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
+  const upperArmGeo = new THREE.CapsuleGeometry(0.062, 0.19, 6, 10);
+  upperArmGeo.translate(0, -0.12, 0);
+  const forearmGeo = new THREE.CapsuleGeometry(0.055, 0.18, 6, 10);
+  forearmGeo.translate(0, -0.11, 0);
+
+  function makeArm(sideX) {
+    const shoulderGroup = new THREE.Group();
+    shoulderGroup.position.set(sideX, 1.31, 0);
+
+    const shoulderCap = new THREE.Mesh(new THREE.SphereGeometry(0.072, 10, 10), topMat);
+    const upperArm = new THREE.Mesh(upperArmGeo, topMat);
+    upperArm.castShadow = true;
+
+    const elbowGroup = new THREE.Group();
+    elbowGroup.position.set(0, -0.25, 0);
+    elbowGroup.rotation.x = -0.18;
+
+    const forearm = new THREE.Mesh(forearmGeo, topMat);
+    forearm.castShadow = true;
+
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.058, 10, 10), skinMat);
+    hand.position.set(0, -0.23, 0);
+
+    elbowGroup.add(forearm, hand);
+    shoulderGroup.add(shoulderCap, upperArm, elbowGroup);
+    return { shoulderGroup, elbowGroup };
+  }
+
+  const leftArm = makeArm(isFemale ? -0.24 : -0.27);
+  const rightArm = makeArm(isFemale ? 0.24 : 0.27);
+  g.add(leftArm.shoulderGroup, rightArm.shoulderGroup);
+
+  // 4. Neck, Human Head, Ears & Face
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.082, 0.16, 12), skinMat);
+  neck.position.set(0, 1.44, 0);
+  g.add(neck);
+
+  const headGroup = new THREE.Group();
+  headGroup.position.set(0, 1.66, 0);
+
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 24, 24), skinMat);
+  head.scale.set(0.93, 1.07, 0.96);
+  head.castShadow = true;
+  headGroup.add(head);
+
+  // Ears
+  [-0.21, 0.21].forEach((ex) => {
+    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.046, 10, 10), skinMat);
+    ear.scale.set(0.55, 1.0, 0.8);
+    ear.position.set(ex, -0.01, -0.01);
+    headGroup.add(ear);
   });
 
-  g.userData = { leftLeg, rightLeg, leftArm, rightArm, walkCycle: 0, sitting: false };
+  // Expressive Anime Eyes + Eyebrows + Tiny Nose + Blush
+  [-0.085, 0.085].forEach((ex) => {
+    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 10), new THREE.MeshBasicMaterial({ color: 0x1e1b4b }));
+    iris.scale.set(0.85, 1.25, 0.45);
+    iris.position.set(ex, -0.01, 0.205);
+
+    const sparkle = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+    sparkle.position.set(ex + 0.012, 0.01, 0.22);
+
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.014, 0.015), hairMat);
+    brow.position.set(ex, 0.065, 0.205);
+
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfda4af }));
+    blush.scale.set(1.3, 0.55, 0.3);
+    blush.position.set(ex * 1.45, -0.065, 0.195);
+
+    headGroup.add(iris, sparkle, brow, blush);
+  });
+
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 8), skinMat);
+  nose.position.set(0, -0.04, 0.225);
+  headGroup.add(nose);
+
+  // 5. Sculpted Anime Hair (Short Layered vs Flowing Long Hair)
+  const scalp = new THREE.Mesh(
+    new THREE.SphereGeometry(0.242, 22, 22, 0, Math.PI * 2, 0, Math.PI * 0.64),
+    hairMat
+  );
+  scalp.scale.set(0.96, 1.05, 1.0);
+  scalp.rotation.x = -0.35; // Covers top and back of skull cleanly
+  scalp.position.set(0, 0.015, -0.015);
+  scalp.castShadow = true;
+  headGroup.add(scalp);
+
+  // Front Bangs Locks
+  [-0.12, -0.05, 0.02, 0.09, 0.14].forEach((bx, idx) => {
+    const bang = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 6), hairMat);
+    bang.position.set(bx, 0.13, 0.18 - Math.abs(bx) * 0.3);
+    bang.rotation.set(Math.PI - 0.28, 0, (idx - 2) * 0.12);
+    headGroup.add(bang);
+  });
+
+  if (isFemale) {
+    // Flowing Back Hair + Side Locks
+    const backCurtain = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.36, 8, 14), hairMat);
+    backCurtain.scale.set(1.18, 1.0, 0.55);
+    backCurtain.position.set(0, -0.18, -0.14);
+    backCurtain.rotation.x = 0.12;
+    backCurtain.castShadow = true;
+    headGroup.add(backCurtain);
+
+    [-0.19, 0.19].forEach((sx) => {
+      const sideLock = new THREE.Mesh(new THREE.CapsuleGeometry(0.045, 0.26, 6, 8), hairMat);
+      sideLock.position.set(sx, -0.12, 0.08);
+      headGroup.add(sideLock);
+    });
+
+    // Cute Hair Ribbon on Back
+    const ribbonTie = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.018, 6, 12), cozyMat(scarf, 0.7));
+    ribbonTie.position.set(0, -0.02, -0.23);
+    headGroup.add(ribbonTie);
+  } else {
+    // Short Tousled Male Hair at Back of Neck
+    [-0.1, -0.03, 0.04, 0.1].forEach((nx, idx) => {
+      const lock = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.18, 6), hairMat);
+      lock.position.set(nx, -0.08, -0.19);
+      lock.rotation.set(Math.PI + 0.2, 0, (idx - 1.5) * 0.15);
+      headGroup.add(lock);
+    });
+  }
+
+  g.add(headGroup);
+
+  g.userData = {
+    leftHip: left.hipGroup,
+    rightHip: right.hipGroup,
+    leftKnee: left.kneeGroup,
+    rightKnee: right.kneeGroup,
+    leftShoulder: leftArm.shoulderGroup,
+    rightShoulder: rightArm.shoulderGroup,
+    leftElbow: leftArm.elbowGroup,
+    rightElbow: rightArm.elbowGroup,
+    headGroup,
+    walkCycle: 0,
+    sitting: false
+  };
   scene.add(g);
   return g;
 }
@@ -829,54 +960,69 @@ function setCharacterSitting(char, isSitting) {
   const u = char.userData;
   u.sitting = isSitting;
   if (isSitting) {
-    u.leftLeg.rotation.x = -Math.PI / 2.1;
-    u.rightLeg.rotation.x = -Math.PI / 2.1;
-    u.leftArm.rotation.x = -0.35;
-    u.rightArm.rotation.x = -0.35;
+    u.leftHip.rotation.x = -Math.PI / 2.15;
+    u.rightHip.rotation.x = -Math.PI / 2.15;
+    u.leftKnee.rotation.x = Math.PI / 2.3;
+    u.rightKnee.rotation.x = Math.PI / 2.3;
+    u.leftShoulder.rotation.x = -0.35;
+    u.rightShoulder.rotation.x = -0.35;
+    u.leftElbow.rotation.x = -0.5;
+    u.rightElbow.rotation.x = -0.5;
   }
 }
 
 function animateCharacterPose(char, isMoving, isSwimming, dt) {
   const u = char.userData;
   if (u.sitting) return;
+
   if (isSwimming) {
     u.walkCycle += dt * 7;
-    u.leftArm.rotation.x = -Math.PI / 2 + Math.sin(u.walkCycle) * 0.7;
-    u.rightArm.rotation.x = -Math.PI / 2 + Math.cos(u.walkCycle) * 0.7;
-    u.leftLeg.rotation.x = Math.sin(u.walkCycle * 1.4) * 0.5;
-    u.rightLeg.rotation.x = -Math.sin(u.walkCycle * 1.4) * 0.5;
+    u.leftShoulder.rotation.x = -Math.PI / 2 + Math.sin(u.walkCycle) * 0.7;
+    u.rightShoulder.rotation.x = -Math.PI / 2 + Math.cos(u.walkCycle) * 0.7;
+    u.leftHip.rotation.x = Math.sin(u.walkCycle * 1.4) * 0.45;
+    u.rightHip.rotation.x = -Math.sin(u.walkCycle * 1.4) * 0.45;
+    u.leftKnee.rotation.x = 0.25;
+    u.rightKnee.rotation.x = 0.25;
   } else if (isMoving) {
-    u.walkCycle += dt * 11;
-    const s = Math.sin(u.walkCycle) * 0.6;
-    u.leftLeg.rotation.x = s; u.rightLeg.rotation.x = -s;
-    u.leftArm.rotation.x = -s * 0.65; u.rightArm.rotation.x = s * 0.65;
+    u.walkCycle += dt * 10.5;
+    const s = Math.sin(u.walkCycle) * 0.55;
+    u.leftHip.rotation.x = s;
+    u.rightHip.rotation.x = -s;
+    u.leftKnee.rotation.x = Math.max(0, -s * 0.75);
+    u.rightKnee.rotation.x = Math.max(0, s * 0.75);
+    u.leftShoulder.rotation.x = -s * 0.65;
+    u.rightShoulder.rotation.x = s * 0.65;
   } else {
-    u.leftLeg.rotation.x *= 0.84; u.rightLeg.rotation.x *= 0.84;
-    u.leftArm.rotation.x *= 0.84; u.rightArm.rotation.x *= 0.84;
+    u.leftHip.rotation.x *= 0.84;
+    u.rightHip.rotation.x *= 0.84;
+    u.leftKnee.rotation.x *= 0.84;
+    u.rightKnee.rotation.x *= 0.84;
+    u.leftShoulder.rotation.x *= 0.84;
+    u.rightShoulder.rotation.x *= 0.84;
   }
 }
 
 // Main Story Cast
-const eric = createChibiCharacter({ coat: 0x3b82f6, hair: 0x1c1917, scarf: 0xfbbf24 });
+const eric = createHumanCharacter({ topColor: 0x3b82f6, bottomColor: 0x1e293b, hairColor: 0x1c1917, scarf: 0xfbbf24, isFemale: false });
 eric.position.set(-1.3, 0, -4);
 eric.rotation.y = Math.PI / 2;
 
-const jane = createChibiCharacter({ coat: 0xfb7185, hair: 0x451a03, scarf: 0xf43f5e });
+const jane = createHumanCharacter({ topColor: 0xfb7185, hairColor: 0x451a03, scarf: 0xf43f5e, isFemale: true });
 jane.position.set(1.3, 0, -4);
 jane.rotation.y = -Math.PI / 2;
 
-const sora = createChibiCharacter({ coat: 0xfacc15, hair: 0x57361a, scarf: 0xe11d48 });
+const sora = createHumanCharacter({ topColor: 0xfacc15, hairColor: 0x57361a, scarf: 0xe11d48, isFemale: true });
 sora.position.set(-8.0, 0, -3.2);
 sora.rotation.y = Math.PI / 3;
 
-// Lively Chibi Townspeople (Strolling & Hanging Out!)
+// Lively Townspeople
 const villagers = [
-  { mesh: createChibiCharacter({ coat: 0x10b981, hair: 0x292524, scarf: 0xfef3c7 }), type: "orbit", cx: 0, cz: -4, r: 6.4, angle: 0.4, speed: 0.35 },
-  { mesh: createChibiCharacter({ coat: 0x8b5cf6, hair: 0x451a03, scarf: 0x38bdf8 }), type: "orbit", cx: 0, cz: -4, r: 6.8, angle: 3.5, speed: -0.3 },
-  { mesh: createChibiCharacter({ coat: 0xea580c, hair: 0x1c1917, scarf: 0xfde047 }), type: "patrol", x1: -8, z1: 11, x2: 8, z2: 11, t: 0.2, dir: 1, speed: 0.16 },
-  { mesh: createChibiCharacter({ coat: 0x14b8a6, hair: 0x78350f, scarf: 0xf472b6 }), type: "patrol", x1: -9, z1: -14, x2: 9, z2: -14, t: 0.7, dir: -1, speed: 0.14 },
-  { mesh: createChibiCharacter({ coat: 0xf97316, hair: 0x451a03, scarf: 0xffffff }), type: "idle", x: 8.2, z: -3.3, rotY: -Math.PI / 3 },
-  { mesh: createChibiCharacter({ coat: 0x6366f1, hair: 0x1c1917, scarf: 0xfb7185 }), type: "idle", x: 6.5, z: -9.0, rotY: -0.5 }
+  { mesh: createHumanCharacter({ topColor: 0x10b981, hairColor: 0x292524, scarf: 0xfef3c7, isFemale: false }), type: "orbit", cx: 0, cz: -4, r: 6.4, angle: 0.4, speed: 0.35 },
+  { mesh: createHumanCharacter({ topColor: 0x8b5cf6, hairColor: 0x451a03, scarf: 0x38bdf8, isFemale: true }), type: "orbit", cx: 0, cz: -4, r: 6.8, angle: 3.5, speed: -0.3 },
+  { mesh: createHumanCharacter({ topColor: 0xea580c, hairColor: 0x1c1917, scarf: 0xfde047, isFemale: false }), type: "patrol", x1: -8, z1: 11, x2: 8, z2: 11, t: 0.2, dir: 1, speed: 0.16 },
+  { mesh: createHumanCharacter({ topColor: 0x14b8a6, hairColor: 0x78350f, scarf: 0xf472b6, isFemale: true }), type: "patrol", x1: -9, z1: -14, x2: 9, z2: -14, t: 0.7, dir: -1, speed: 0.14 },
+  { mesh: createHumanCharacter({ topColor: 0xf97316, hairColor: 0x451a03, scarf: 0xffffff, isFemale: true }), type: "idle", x: 8.2, z: -3.3, rotY: -Math.PI / 3 },
+  { mesh: createHumanCharacter({ topColor: 0x6366f1, hairColor: 0x1c1917, scarf: 0xfb7185, isFemale: false }), type: "idle", x: 6.5, z: -9.0, rotY: -0.5 }
 ];
 villagers.forEach((v) => {
   if (v.type === "idle") {
@@ -1068,7 +1214,7 @@ function beginOpeningQuarrel() {
 function finishJaneLeaving() {
   const beachZ = 158;
   const beachY = getTerrainHeight(0, beachZ);
-  jane.position.set(0, beachY - 0.25, beachZ);
+  jane.position.set(-0.45, beachY - 0.52, beachZ);
   jane.rotation.y = 0;
   setCharacterSitting(jane, true);
 
@@ -1157,8 +1303,8 @@ function interactWithTarget(target) {
 }
 
 function triggerSunsetFinale() {
-  const beachY = getTerrainHeight(1.2, 158);
-  eric.position.set(1.2, beachY - 0.25, 158);
+  const beachY = getTerrainHeight(0.45, 158);
+  eric.position.set(0.45, beachY - 0.52, 158);
   eric.rotation.y = 0;
   setCharacterSitting(eric, true);
 
@@ -1341,7 +1487,6 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const elapsed = clock.getElapsedTime();
 
-  // Animate Water Waves & Shoreline Surge
   const wPos = waterGeo.attributes.position;
   for (let i = 0; i < wPos.count; i++) {
     wPos.setY(i, getWaterHeight(wPos.getX(i), wPos.getZ(i), elapsed));
@@ -1351,14 +1496,12 @@ function animate() {
   shoreFoam.position.z = 164.4 + Math.sin(elapsed * 1.9) * 0.65;
   shoreFoam.material.opacity = 0.35 + Math.sin(elapsed * 1.9) * 0.14;
 
-  // River Foam Streaks Flowing Downstream (+X)
   riverFoamStreaks.forEach((s) => {
     s.mesh.position.x += s.speed * dt;
     s.mesh.position.y = getWaterHeight(s.mesh.position.x, s.mesh.position.z, elapsed) + 0.04;
     if (s.mesh.position.x > 22) s.mesh.position.x = -22;
   });
 
-  // Expanding Water Ripples
   for (let i = waterRipples.length - 1; i >= 0; i--) {
     const r = waterRipples[i];
     r.life += dt;
@@ -1373,7 +1516,6 @@ function animate() {
     }
   }
 
-  // Water Splash Droplets
   for (let i = waterSplashes.length - 1; i >= 0; i--) {
     const s = waterSplashes[i];
     s.life -= dt;
@@ -1387,7 +1529,6 @@ function animate() {
     }
   }
 
-  // Chimney Smoke, Palm Breeze & Bonfire Sparks
   chimneySmokes.forEach((cs) => {
     const cycle = (elapsed * 0.45 + cs.offset) % 1;
     cs.mesh.position.y = cs.baseY + cycle * 2.6;
@@ -1407,7 +1548,6 @@ function animate() {
     if (sp.mesh.position.y > firePos.y + 3.2) sp.mesh.position.y = firePos.y + 0.4;
   });
 
-  // Animate Bustling Villagers
   villagers.forEach((v) => {
     if (v.type === "orbit") {
       v.angle += v.speed * dt;
@@ -1432,7 +1572,6 @@ function animate() {
     }
   });
 
-  // Floating Dust Motes
   const dPos = dustGeo.attributes.position;
   for (let i = 0; i < dPos.count; i++) {
     let dy = dPos.getY(i) + Math.sin(elapsed + i) * dt * 0.25;
@@ -1560,8 +1699,8 @@ function animate() {
 
     let moveX = state.windForceX * dt;
     let moveZ = 0;
-    if (inWater && pz >= 18 && pz <= 39) moveX += 2.2 * dt; // River rapids current
-    if (inWater && pz > 112 && pz <= 150) moveX += Math.sin(elapsed * 0.9) * 1.1 * dt; // Ocean tide sway
+    if (inWater && pz >= 18 && pz <= 39) moveX += 2.2 * dt;
+    if (inWater && pz > 112 && pz <= 150) moveX += Math.sin(elapsed * 0.9) * 1.1 * dt;
 
     if (isMovingInput) {
       const len = Math.hypot(fwd, side);
@@ -1635,19 +1774,19 @@ function animate() {
   sunLight.position.set(eric.position.x + 18, eric.position.y + 30, eric.position.z + 24);
 
   if (state.phase === "FLASH" || state.phase === "QUARREL" || state.phase === "JANE_LEAVING") {
-    camera.position.lerp(new THREE.Vector3(0, 3.6, 4.2), 0.06);
-    camera.lookAt(0, 1.35, -4);
+    camera.position.lerp(new THREE.Vector3(0, 3.4, 3.8), 0.06);
+    camera.lookAt(0, 1.25, -4);
   } else if (state.phase === "ENDING") {
-    const orbitX = Math.sin(elapsed * 0.18) * 5.2;
-    camera.position.lerp(new THREE.Vector3(orbitX, eric.position.y + 2.6, 151.5), 0.04);
-    camera.lookAt(0.6, eric.position.y + 1.3, 175);
+    const orbitX = Math.sin(elapsed * 0.18) * 4.5;
+    camera.position.lerp(new THREE.Vector3(orbitX, eric.position.y + 2.1, 152.2), 0.04);
+    camera.lookAt(0, eric.position.y + 1.15, 175);
   } else {
-    const camDist = 11.2;
+    const camDist = 10.6;
     const tx = eric.position.x + Math.sin(state.camYaw) * Math.cos(state.camPitch) * camDist;
-    const ty = eric.position.y + 2.2 + Math.sin(state.camPitch) * camDist;
+    const ty = eric.position.y + 2.1 + Math.sin(state.camPitch) * camDist;
     const tz = eric.position.z + Math.cos(state.camYaw) * Math.cos(state.camPitch) * camDist;
     camera.position.lerp(new THREE.Vector3(tx, ty, tz), 0.12);
-    camera.lookAt(eric.position.x, eric.position.y + 1.3, eric.position.z);
+    camera.lookAt(eric.position.x, eric.position.y + 1.2, eric.position.z);
   }
 
   renderer.render(scene, camera);
