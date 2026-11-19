@@ -339,6 +339,7 @@ scene.add(waterMesh);
 /* 7. Oversized Diorama Props, Volumetric Lamps & Atmospheric Dust */
 const colliders = [];
 const platforms = [];
+const boxPlatforms = [];
 const activeMeteors = [];
 let petalSystem = null;
 
@@ -476,7 +477,9 @@ createLanternPost(-7.5, -5.5, true);
   const pier = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.6, 2.4), cozyMat(0x78350f, 0.9, { map: woodTex }));
   pier.position.set(0, 0.2, bz);
   pier.castShadow = true;
+  pier.receiveShadow = true;
   scene.add(pier);
+  boxPlatforms.push({ x: 0, z: bz, y: 0.5, halfW: 2.2, halfD: 1.2 });
 });
 
 // River Stepping Stones + Scarf Island
@@ -967,7 +970,6 @@ function triggerSunsetFinale() {
       updateQuestUI(7);
       state.phase = "ENDING";
       document.getElementById("staminaBox").hidden = true;
-      renderSavedNotes();
       setTimeout(() => {
         document.getElementById("endingOverlay").hidden = false;
       }, 2200);
@@ -982,6 +984,12 @@ function getSupportHeight(x, z, currentY) {
     const onRock = Math.hypot(x - p.x, z - p.z) <= p.r;
     if (onRock && (currentY >= p.y - 1.45 || (state.isSwimming && p.y <= 0.7))) {
       y = Math.max(y, p.y);
+    }
+  }
+  for (const b of boxPlatforms) {
+    const onBox = Math.abs(x - b.x) <= b.halfW && Math.abs(z - b.z) <= b.halfD;
+    if (onBox && (currentY >= b.y - 1.45 || (state.isSwimming && b.y <= 0.7))) {
+      y = Math.max(y, b.y);
     }
   }
   return y;
@@ -1033,33 +1041,6 @@ function findNearbyInteractable() {
   }
   return null;
 }
-
-/* 15. Sorry Note Tribute Wall */
-function renderSavedNotes() {
-  const wrap = document.getElementById("savedNotes");
-  let notes = [];
-  try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || "[]"); } catch {}
-  wrap.innerHTML = "";
-  notes.slice(0, 4).forEach((txt) => {
-    const div = document.createElement("div");
-    div.className = "saved-note-item";
-    div.textContent = `"${txt}"`;
-    wrap.appendChild(div);
-  });
-}
-
-document.getElementById("noteForm").addEventListener("submit", (e) => {
-  e.preventDefault();
-  const input = document.getElementById("sorryNoteInput");
-  const val = input.value.trim();
-  if (!val) return;
-  let notes = [];
-  try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || "[]"); } catch {}
-  notes.unshift(val);
-  localStorage.setItem(NOTES_KEY, JSON.stringify(notes.slice(0, 10)));
-  input.value = "";
-  renderSavedNotes();
-});
 
 /* 16. Input Listeners */
 window.addEventListener("keydown", (e) => {
