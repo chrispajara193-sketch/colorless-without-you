@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Colorless Without You — 3D Story Game</title>
+  <title>Colorless Without You — Animated 3D Adventure</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
   <script>
@@ -17,20 +17,19 @@
 </head>
 <body>
 
-  <!-- 3D Canvas Container -->
   <div id="canvasWrap" class="canvas-wrap">
     <canvas id="worldCanvas"></canvas>
   </div>
 
-  <!-- Title Flash Intro Overlay -->
+  <!-- Cinematic Title Flash -->
   <div id="titleFlash" class="title-flash">
     <div class="title-inner">
-      <span class="title-eyebrow">A 3D Short Story</span>
+      <span class="title-eyebrow">An Animated 3D Journey</span>
       <h1 class="game-title">
         <span class="title-color">Colorless</span> Without You
       </h1>
       <div class="title-divider"></div>
-      <p class="title-sub">Every word leaves a mark. Every step brings the color back.</p>
+      <p class="title-sub">Cross the rushing river, climb the storm ridge, and find her before sunset fades.</p>
     </div>
   </div>
 
@@ -38,29 +37,44 @@
   <header id="hud" class="hud" hidden>
     <div class="quest-panel">
       <div class="quest-header">
-        <span class="quest-tag">Current Quest</span>
+        <span id="zoneLabel" class="quest-tag">Sunset Town</span>
         <span id="colorMeter" class="color-meter">Color: 100%</span>
       </div>
       <h2 id="questTitle">The Argument</h2>
-      <p id="questDesc">Watch the scene unfold...</p>
+      <p id="questDesc">Listen to Maya...</p>
       <div id="compassLine" class="compass-line" hidden>
         <span id="compassArrow" class="compass-arrow">➤</span>
         <span id="compassDist">0m away</span>
       </div>
     </div>
 
-    <div class="hud-controls">
-      <button id="muteBtn" class="hud-btn" title="Toggle Sound">🔊 Sound On</button>
-      <button id="restartBtn" class="hud-btn" title="Restart Story">↻ Restart</button>
+    <div class="hud-right">
+      <div class="hud-controls">
+        <button id="muteBtn" class="hud-btn">🔊 Sound On</button>
+        <button id="restartBtn" class="hud-btn">↻ Restart</button>
+      </div>
+      <!-- Stamina Meter -->
+      <div id="staminaBox" class="stamina-box" hidden>
+        <div class="stamina-label">
+          <span>Stamina</span>
+          <span id="staminaState">Ready</span>
+        </div>
+        <div class="stamina-track">
+          <div id="staminaFill" class="stamina-fill"></div>
+        </div>
+      </div>
     </div>
   </header>
 
-  <!-- Context Interact Prompt -->
+  <!-- Wind / Water Status Banner -->
+  <div id="alertBanner" class="alert-banner" hidden></div>
+
+  <!-- Interact Prompt -->
   <button id="interactPrompt" class="interact-prompt" hidden>
-    Press <kbd>E</kbd> / <kbd>Space</kbd> or Tap to Interact
+    Press <kbd>E</kbd> or Tap to Interact
   </button>
 
-  <!-- Story / Dialogue Box -->
+  <!-- Story Dialogue Box -->
   <section id="dialogueBox" class="dialogue-box" hidden>
     <div class="dialogue-head">
       <strong id="speakerName">Maya</strong>
@@ -74,33 +88,38 @@
   <!-- Ending Overlay -->
   <div id="endingOverlay" class="ending-overlay" hidden>
     <div class="ending-card">
-      <span class="title-eyebrow">The End</span>
+      <span class="title-eyebrow">Fin</span>
       <h2>Color Returned.</h2>
       <p>
-        Sometimes saying <em>"I'm sorry"</em> takes a walk across an empty world—but honesty brings every color back to life.
+        Across rushing currents, mountain winds, and open sea—every honest step brought the sunset back.
       </p>
       <div class="ending-actions">
-        <button id="exploreFreeBtn" class="btn btn-secondary">Explore in Color</button>
+        <button id="exploreFreeBtn" class="btn btn-secondary">Watch the Sunset</button>
         <button id="playAgainBtn" class="btn btn-primary">Play Again</button>
       </div>
     </div>
   </div>
 
-  <!-- Controls Hint & Mobile Touch Pad -->
+  <!-- Desktop Controls Bar -->
   <div id="controlsHint" class="controls-hint" hidden>
-    <span><kbd>WASD</kbd> / <kbd>Arrows</kbd> Move</span>
-    <span><kbd>Shift</kbd> Run</span>
-    <span>Drag Mouse / <kbd>Q</kbd><kbd>E</kbd> Rotate Camera</span>
-    <span><kbd>Space</kbd> Interact</span>
+    <span><kbd>WASD</kbd> Move</span>
+    <span><kbd>Shift</kbd> Sprint</span>
+    <span><kbd>Space</kbd> Jump / Swim</span>
+    <span><kbd>E</kbd> Interact</span>
+    <span>Drag Mouse Rotate</span>
   </div>
 
+  <!-- Touch Controls -->
   <div id="mobilePad" class="mobile-pad" hidden>
     <div class="dpad">
       <span></span><button class="pad-btn" data-key="w">▲</button><span></span>
       <button class="pad-btn" data-key="a">◀</button><span></span><button class="pad-btn" data-key="d">▶</button>
       <span></span><button class="pad-btn" data-key="s">▼</button><span></span>
     </div>
-    <button id="mobileActionBtn" class="mobile-action">Interact</button>
+    <div class="mobile-btns">
+      <button id="mobileJumpBtn" class="mobile-action btn-jump">Jump</button>
+      <button id="mobileActionBtn" class="mobile-action">Interact</button>
+    </div>
   </div>
 
   <script src="script.js"></script>
