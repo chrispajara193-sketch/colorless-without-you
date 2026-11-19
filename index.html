@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Colorless Without You — Animated 3D Adventure</title>
+  <title>Finding Jane — Eric &amp; Jane 3D Story Game</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -21,15 +21,15 @@
     <canvas id="worldCanvas"></canvas>
   </div>
 
-  <!-- Cinematic Title Flash -->
+  <!-- Title Flash Intro -->
   <div id="titleFlash" class="title-flash">
     <div class="title-inner">
-      <span class="title-eyebrow">An Animated 3D Journey</span>
+      <span class="title-eyebrow">Eric &amp; Jane</span>
       <h1 class="game-title">
-        <span class="title-color">Colorless</span> Without You
+        Finding <span class="title-color">Jane</span>
       </h1>
       <div class="title-divider"></div>
-      <p class="title-sub">Cross the rushing river, climb the storm ridge, and find her before sunset fades.</p>
+      <p class="title-sub">"What if Eric can never find Jane?" — "Then the world turns black and white."</p>
     </div>
   </div>
 
@@ -41,7 +41,12 @@
         <span id="colorMeter" class="color-meter">Color: 100%</span>
       </div>
       <h2 id="questTitle">The Argument</h2>
-      <p id="questDesc">Listen to Maya...</p>
+      <p id="questDesc">Listen to Jane...</p>
+      <div id="inventoryRow" class="inventory-row">
+        <span id="badgeScarf" class="inv-pill">🧣 Scarf</span>
+        <span id="badgeKey" class="inv-pill">🗝️ Sky Key</span>
+        <span id="badgeLocket" class="inv-pill">💠 Locket</span>
+      </div>
       <div id="compassLine" class="compass-line" hidden>
         <span id="compassArrow" class="compass-arrow">➤</span>
         <span id="compassDist">0m away</span>
@@ -53,7 +58,6 @@
         <button id="muteBtn" class="hud-btn">🔊 Sound On</button>
         <button id="restartBtn" class="hud-btn">↻ Restart</button>
       </div>
-      <!-- Stamina Meter -->
       <div id="staminaBox" class="stamina-box" hidden>
         <div class="stamina-label">
           <span>Stamina</span>
@@ -66,18 +70,16 @@
     </div>
   </header>
 
-  <!-- Wind / Water Status Banner -->
   <div id="alertBanner" class="alert-banner" hidden></div>
 
-  <!-- Interact Prompt -->
   <button id="interactPrompt" class="interact-prompt" hidden>
     Press <kbd>E</kbd> or Tap to Interact
   </button>
 
-  <!-- Story Dialogue Box -->
+  <!-- Dialogue Box -->
   <section id="dialogueBox" class="dialogue-box" hidden>
     <div class="dialogue-head">
-      <strong id="speakerName">Maya</strong>
+      <strong id="speakerName">Jane</strong>
       <span id="speakerRole" class="speaker-role"></span>
     </div>
     <p id="dialogueText"></p>
@@ -85,14 +87,24 @@
     <span id="dialogueHint" class="dialogue-hint">Press Space / Click to continue ▸</span>
   </section>
 
-  <!-- Ending Overlay -->
+  <!-- Ending & Sorry Note Tribute Overlay -->
   <div id="endingOverlay" class="ending-overlay" hidden>
     <div class="ending-card">
-      <span class="title-eyebrow">Fin</span>
+      <span class="title-eyebrow">Finding Jane — Complete</span>
       <h2>Color Returned.</h2>
-      <p>
-        Across rushing currents, mountain winds, and open sea—every honest step brought the sunset back.
+      <p class="ending-quote">
+        "I'm sorry. No words can describe how sorry I feel. Seeing things from your perspective saddens me."
       </p>
+
+      <form id="noteForm" class="note-form">
+        <label for="sorryNoteInput">Leave a message for someone you miss (optional):</label>
+        <div class="note-input-row">
+          <input id="sorryNoteInput" type="text" maxlength="90" placeholder="Say sorry to Jane for me..." />
+          <button type="submit" class="btn btn-note">Save</button>
+        </div>
+      </form>
+      <div id="savedNotes" class="saved-notes"></div>
+
       <div class="ending-actions">
         <button id="exploreFreeBtn" class="btn btn-secondary">Watch the Sunset</button>
         <button id="playAgainBtn" class="btn btn-primary">Play Again</button>
@@ -100,7 +112,7 @@
     </div>
   </div>
 
-  <!-- Desktop Controls Bar -->
+  <!-- Desktop Controls -->
   <div id="controlsHint" class="controls-hint" hidden>
     <span><kbd>WASD</kbd> Move</span>
     <span><kbd>Shift</kbd> Sprint</span>
@@ -109,7 +121,7 @@
     <span>Drag Mouse Rotate</span>
   </div>
 
-  <!-- Touch Controls -->
+  <!-- Mobile Controls -->
   <div id="mobilePad" class="mobile-pad" hidden>
     <div class="dpad">
       <span></span><button class="pad-btn" data-key="w">▲</button><span></span>
