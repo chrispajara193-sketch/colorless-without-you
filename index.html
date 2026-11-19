@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>Finding Jane — Eric &amp; Jane 3D Story Game</title>
+  <title>Finding Jane — Chibi Diorama 3D Adventure</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -21,10 +21,13 @@
     <canvas id="worldCanvas"></canvas>
   </div>
 
+  <!-- Soft Cinematic Diorama Vignette -->
+  <div class="vignette-overlay"></div>
+
   <!-- Title Flash Intro -->
   <div id="titleFlash" class="title-flash">
     <div class="title-inner">
-      <span class="title-eyebrow">Eric &amp; Jane</span>
+      <span class="title-eyebrow">Eric &amp; Jane · Miniature Tale</span>
       <h1 class="game-title">
         Finding <span class="title-color">Jane</span>
       </h1>
@@ -37,7 +40,7 @@
   <header id="hud" class="hud" hidden>
     <div class="quest-panel">
       <div class="quest-header">
-        <span id="zoneLabel" class="quest-tag">Sunset Town</span>
+        <span id="zoneLabel" class="quest-tag">Lantern Square</span>
         <span id="colorMeter" class="color-meter">Color: 100%</span>
       </div>
       <h2 id="questTitle">The Argument</h2>
@@ -76,7 +79,7 @@
     Press <kbd>E</kbd> or Tap to Interact
   </button>
 
-  <!-- Dialogue Box -->
+  <!-- Story Dialogue Box -->
   <section id="dialogueBox" class="dialogue-box" hidden>
     <div class="dialogue-head">
       <strong id="speakerName">Jane</strong>
@@ -87,7 +90,7 @@
     <span id="dialogueHint" class="dialogue-hint">Press Space / Click to continue ▸</span>
   </section>
 
-  <!-- Ending & Sorry Note Tribute Overlay -->
+  <!-- Ending & Sorry Note Tribute -->
   <div id="endingOverlay" class="ending-overlay" hidden>
     <div class="ending-card">
       <span class="title-eyebrow">Finding Jane — Complete</span>
