@@ -1,3 +1,8 @@
+/* =========================================================
+   COLORLESS WITHOUT YOU — 3D Story Adventure (Three.js)
+========================================================= */
+
+/* 1. Web Audio Story Chimes */
 const AudioEngine = (() => {
   let ctx = null;
   let muted = false;
@@ -810,4 +815,193 @@ document.getElementById("mobileActionBtn").addEventListener("click", () => {
 
 document.querySelectorAll(".pad-btn").forEach((btn) => {
   const k = btn.dataset.key;
-  const on = (e) => { e.preventDefault(); AudioEngine.unlock(); state.keys[k] =
+  const on = (e) => { e.preventDefault(); AudioEngine.unlock(); state.keys[k] = true; };
+  const off = () => { state.keys[k] = false; };
+  btn.addEventListener("mousedown", on);
+  btn.addEventListener("touchstart", on, { passive: false });
+  btn.addEventListener("mouseup", off);
+  btn.addEventListener("mouseleave", off);
+  btn.addEventListener("touchend", off);
+});
+
+// Mouse Drag Camera Orbit
+canvas.addEventListener("mousedown", (e) => {
+  AudioEngine.unlock();
+  state.isDragging = true;
+  state.lastMouseX = e.clientX;
+  state.lastMouseY = e.clientY;
+});
+
+window.addEventListener("mousemove", (e) => {
+  if (!state.isDragging) return;
+  const dx = e.clientX - state.lastMouseX;
+  const dy = e.clientY - state.lastMouseY;
+  state.camYaw -= dx * 0.006;
+  state.camPitch = Math.max(0.15, Math.min(0.85, state.camPitch + dy * 0.004));
+  state.lastMouseX = e.clientX;
+  state.lastMouseY = e.clientY;
+});
+
+window.addEventListener("mouseup", () => { state.isDragging = false; });
+
+document.getElementById("muteBtn").addEventListener("click", (e) => {
+  const muted = AudioEngine.toggleMute();
+  e.target.textContent = muted ? "🔇 Muted" : "🔊 Sound On";
+});
+
+document.getElementById("restartBtn").addEventListener("click", () => location.reload());
+document.getElementById("playAgainBtn").addEventListener("click", () => location.reload());
+document.getElementById("exploreFreeBtn").addEventListener("click", () => {
+  document.getElementById("endingOverlay").hidden = true;
+  state.phase = "EXPLORE";
+});
+
+window.addEventListener("resize", () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+/* 13. Main Animation Loop */
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.getElapsedTime();
+
+  // Clouds drift
+  animatedClouds.forEach((c) => {
+    c.mesh.position.x += c.speed * dt;
+    if (c.mesh.position.x > 52) c.mesh.position.x = -52;
+  });
+
+  // Floating quest items
+  if (ribbonMesh.visible) {
+    ribbonMesh.rotation.y += dt * 2.2;
+    ribbonMesh.position.y = 0.55 + Math.sin(elapsed * 3) * 0.12;
+  }
+  worldFlowers.forEach((f, idx) => {
+    if (f.mesh.visible && !f.collected) {
+      f.mesh.rotation.y += dt * 1.4;
+      f.mesh.position.y = Math.sin(elapsed * 2.5 + idx) * 0.08;
+    }
+  });
+
+  // Celebratory color petals
+  if (petalSystem) {
+    const pos = petalSystem.geometry.attributes.position;
+    for (let i = 0; i < pos.count; i++) {
+      let py = pos.getY(i) - dt * 0.9;
+      if (py < 0.2) py = 7.5;
+      pos.setY(i, py);
+      pos.setX(i, pos.getX(i) + Math.sin(elapsed + i) * dt * 0.4);
+    }
+    pos.needsUpdate = true;
+  }
+
+  // Cutscene: Maya walking away across the bridge
+  if (state.phase === "LADY_LEAVING") {
+    maya.position.x += (0 - maya.position.x) * dt * 1.5;
+    maya.position.z += dt * 4.5;
+    maya.rotation.y = 0;
+    animateCharacterWalk(maya, true, dt);
+    if (maya.position.z >= 19.5) {
+      animateCharacterWalk(maya, false, dt);
+      finishLadyLeaving();
+    }
+  }
+
+  // Player Exploration Movement
+  let playerMoving = false;
+  if (state.phase === "EXPLORE" && !state.dialogueActive) {
+    if (state.keys["q"]) state.camYaw += dt * 2.0;
+    if (state.keys["e"] && !state.nearbyInteractable) state.camYaw -= dt * 2.0;
+
+    let fwd = 0, side = 0;
+    if (state.keys["w"] || state.keys["arrowup"]) fwd += 1;
+    if (state.keys["s"] || state.keys["arrowdown"]) fwd -= 1;
+    if (state.keys["a"] || state.keys["arrowleft"]) side -= 1;
+    if (state.keys["d"] || state.keys["arrowright"]) side += 1;
+
+    if (fwd !== 0 || side !== 0) {
+      const len = Math.hypot(fwd, side);
+      fwd /= len;
+      side /= len;
+
+      const sinY = Math.sin(state.camYaw);
+      const cosY = Math.cos(state.camYaw);
+      const moveX = (-sinY * fwd + cosY * side);
+      const moveZ = (-cosY * fwd - sinY * side);
+
+      const speed = state.keys["shift"] ? 8.8 : 5.6;
+      const nx = player.position.x + moveX * speed * dt;
+      const nz = player.position.z + moveZ * speed * dt;
+
+      if (canWalkTo(nx, player.position.z)) player.position.x = nx;
+      if (canWalkTo(player.position.x, nz)) player.position.z = nz;
+
+      player.rotation.y = Math.atan2(moveX, moveZ);
+      playerMoving = true;
+    }
+
+    // Check interactables & update waypoint compass
+    state.nearbyInteractable = findNearbyInteractable();
+    const promptBtn = document.getElementById("interactPrompt");
+    if (state.nearbyInteractable) {
+      promptBtn.hidden = false;
+      promptBtn.innerHTML = `Press <kbd>Space</kbd> / Tap: <strong>${state.nearbyInteractable.label}</strong>`;
+    } else {
+      promptBtn.hidden = true;
+    }
+
+    const obj = getCurrentObjectivePos();
+    if (obj) {
+      beacon.visible = true;
+      beacon.position.x = obj.x;
+      beacon.position.z = obj.z;
+      beacon.rotation.y += dt;
+
+      const dist = Math.round(Math.hypot(obj.x - player.position.x, obj.z - player.position.z));
+      document.getElementById("compassDist").textContent = `${dist}m to objective`;
+      const targetAngle = Math.atan2(obj.x - player.position.x, obj.z - player.position.z);
+      const relDeg = ((targetAngle - state.camYaw) * 180) / Math.PI;
+      document.getElementById("compassArrow").style.transform = `rotate(${-relDeg - 90}deg)`;
+    } else {
+      beacon.visible = false;
+    }
+  } else {
+    beacon.visible = false;
+    document.getElementById("interactPrompt").hidden = true;
+  }
+
+  animateCharacterWalk(player, playerMoving, dt);
+
+  // Smooth Third-Person Camera Tracking
+  if (state.phase === "FLASH" || state.phase === "QUARREL" || state.phase === "LADY_LEAVING") {
+    camera.position.lerp(new THREE.Vector3(0, 3.6, 2.8), 0.06);
+    camera.lookAt(0, 1.3, -4);
+  } else {
+    const camDist = 8.5;
+    const targetCamX = player.position.x + Math.sin(state.camYaw) * Math.cos(state.camPitch) * camDist;
+    const targetCamY = player.position.y + 1.8 + Math.sin(state.camPitch) * camDist;
+    const targetCamZ = player.position.z + Math.cos(state.camYaw) * Math.cos(state.camPitch) * camDist;
+
+    camera.position.lerp(new THREE.Vector3(targetCamX, targetCamY, targetCamZ), 0.12);
+    camera.lookAt(player.position.x, player.position.y + 1.35, player.position.z);
+  }
+
+  renderer.render(scene, camera);
+}
+
+/* 14. Start Title Flash -> Quarrel Intro */
+window.addEventListener("DOMContentLoaded", () => {
+  setWorldGrayscale(0);
+  animate();
+
+  // After the 3.7s Title Flash completes, start the opening quarrel cutscene
+  setTimeout(() => {
+    document.getElementById("titleFlash").hidden = true;
+    beginOpeningQuarrel();
+  }, 3700);
+});
