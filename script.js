@@ -1,7 +1,10 @@
 /* =========================================================
-   COLORLESS WITHOUT YOU — Anime Cel-Shaded 3D Adventure
-   Town -> Rushing River -> Mountain Climb -> Sunset Beach
+   FINDING JANE — Inspired by "Once We Were Us" (2025)
+   Eric & Jane: Town -> River -> Meteors & Sky Key -> Sunset Beach
 ========================================================= */
+
+const NOTES_KEY = "finding_jane_sorry_notes_v1";
+const SEA_LEVEL = -0.25;
 
 /* 1. Audio Synthesizer */
 const AudioEngine = (() => {
@@ -37,25 +40,28 @@ const AudioEngine = (() => {
     unlock: init,
     toggleMute() { muted = !muted; return muted; },
     blip: () => playTone(560, 0.07, "triangle", 0.04),
-    jump: () => playTone(310, 0.12, "sine", 0.05),
-    splash: () => playTone(160, 0.18, "triangle", 0.05),
+    jump: () => playTone(320, 0.12, "sine", 0.05),
+    splash: () => playTone(165, 0.18, "triangle", 0.05),
+    hit: () => { playTone(130, 0.18, "sawtooth", 0.07); playTone(85, 0.22, "sawtooth", 0.06, 0.06); },
     colorDrain: () => [440, 392, 330, 247].forEach((f, i) => playTone(f, 0.45, "sine", 0.06, i * 0.22)),
     sparkle: () => [523, 659, 880].forEach((f, i) => playTone(f, 0.28, "triangle", 0.06, i * 0.09)),
     colorReturn: () => [261, 329, 392, 493, 587, 659, 784, 987].forEach((f, i) => playTone(f, 0.6, "sine", 0.07, i * 0.1))
   };
 })();
 
-/* 2. Game State & Quest Definitions */
-const SEA_LEVEL = -0.25;
-
+/* 2. State & Quests */
 const state = {
-  phase: "FLASH", // FLASH | QUARREL | LADY_LEAVING | EXPLORE | ENDING
+  phase: "FLASH", // FLASH | QUARREL | JANE_LEAVING | EXPLORE | ENDING
   grayscale: 0,
   dialogueActive: false,
   dialogueQueue: [],
   dialogueIndex: 0,
   dialogueOnComplete: null,
-  questStep: 0,
+  questStep: 0,   // 0=quarrel, 1=talk station keeper, 2=river scarf, 3=sky key, 4=summit gate/locket, 5=sea cove, 6=sunset beach, 7=done
+  hasScarf: false,
+  hasKey: false,
+  hasLocket: false,
+  gateUnlocked: false,
   stamina: 100,
   velY: 0,
   grounded: true,
@@ -63,6 +69,7 @@ const state = {
   lastSafePos: { x: 0, y: 0, z: 14 },
   windForceX: 0,
   windTimer: 0,
+  meteorTimer: 0,
   camYaw: 0,
   camPitch: 0.34,
   keys: {},
@@ -73,16 +80,17 @@ const state = {
 };
 
 const QUEST_INFO = {
-  0: { title: "The Quarrel", desc: "Listen to Maya..." },
-  1: { title: "Ask the Florist", desc: "Talk to Clara at the town flower stall." },
-  2: { title: "Cross the Rushing River", desc: "Jump rocks or swim the river current to grab Maya's Crimson Scarf." },
-  3: { title: "Climb the Storm Ridge", desc: "Ascend the winding mountain pass & braving winds, claim her Silver Locket at the summit." },
-  4: { title: "Swim the Tidal Cove", desc: "Descend to the ocean cove, swim across the sandbars, and grab the Tide Shell." },
-  5: { title: "Find Maya at Sunset Beach", desc: "Reach the golden beach ahead and tell Maya how sorry you are." },
-  6: { title: "Color Returned", desc: "Watching the sunset together." }
+  0: { title: "The Separation", desc: "Listen to Jane..." },
+  1: { title: "Follow Jane's Footsteps", desc: "Speak to Sora near the old town stall to ask where Jane went." },
+  2: { title: "Cross the Rushing River", desc: "Swim or hop the river rocks to recover Jane's Red Scarf." },
+  3: { title: "Find the Sky Key", desc: "Climb the East Mountain Cliff & dodge falling meteors to find the Sky Key." },
+  4: { title: "Unlock the Summit Gate", desc: "Bring the Sky Key up the stairway to unlock the Summit Torii Gate & claim her Locket." },
+  5: { title: "Swim the Tidal Cove", desc: "Descend to the sea, swim across the sandbars, and reach Sunset Beach." },
+  6: { title: "Find Jane at Sunset Beach", desc: "Walk up to Jane on the golden sand and tell her how sorry you are." },
+  7: { title: "Color Returned", desc: "Eric & Jane watching the sunset together." }
 };
 
-/* 3. Three.js Renderer, Scene & Cel-Shading Gradient */
+/* 3. Three.js Renderer, Scene & Cel-Shaded Ramp */
 const canvas = document.getElementById("worldCanvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -91,16 +99,11 @@ renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0xfdba74, 0.0068);
+scene.fog = new THREE.FogExp2(0xfdba74, 0.0065);
 
-const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 350);
+const camera = new THREE.PerspectiveCamera(56, window.innerWidth / window.innerHeight, 0.1, 360);
 
-// 3-Tone Anime Cel-Shading Ramp (RGBAFormat for universal WebGL1/2 support)
-const toonData = new Uint8Array([
-  105, 105, 105, 255,
-  190, 190, 190, 255,
-  255, 255, 255, 255
-]);
+const toonData = new Uint8Array([105, 105, 105, 255, 190, 190, 190, 255, 255, 255, 255, 255]);
 const toonGradient = new THREE.DataTexture(toonData, 3, 1, THREE.RGBAFormat);
 toonGradient.minFilter = THREE.NearestFilter;
 toonGradient.magFilter = THREE.NearestFilter;
@@ -110,7 +113,6 @@ function toonMat(color, extra = {}) {
   return new THREE.MeshToonMaterial({ color, gradientMap: toonGradient, ...extra });
 }
 
-// Lighting
 const hemiLight = new THREE.HemisphereLight(0xfde68a, 0x3b82f6, 0.72);
 scene.add(hemiLight);
 
@@ -120,7 +122,7 @@ sunLight.castShadow = true;
 sunLight.shadow.mapSize.set(2048, 2048);
 sunLight.shadow.camera.near = 1;
 sunLight.shadow.camera.far = 140;
-const sRange = 42;
+const sRange = 44;
 sunLight.shadow.camera.left = -sRange;
 sunLight.shadow.camera.right = sRange;
 sunLight.shadow.camera.top = sRange;
@@ -128,8 +130,7 @@ sunLight.shadow.camera.bottom = -sRange;
 scene.add(sunLight);
 scene.add(sunLight.target);
 
-/* 4. Anime Sunset Sky Dome Shader + Giant Horizon Sun */
-const skyGeo = new THREE.SphereGeometry(260, 32, 24);
+/* 4. Anime Sunset Sky Dome & Ocean Sun */
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide,
   depthWrite: false,
@@ -159,9 +160,8 @@ const skyMat = new THREE.ShaderMaterial({
     }
   `
 });
-scene.add(new THREE.Mesh(skyGeo, skyMat));
+scene.add(new THREE.Mesh(new THREE.SphereGeometry(260, 32, 24), skyMat));
 
-// Giant Glowing Sunset Disc over the Northern Ocean
 const sunDisc = new THREE.Mesh(
   new THREE.CircleGeometry(24, 32),
   new THREE.MeshBasicMaterial({ color: 0xfde047, fog: false })
@@ -178,7 +178,7 @@ sunHalo.position.set(0, 22, 246);
 sunHalo.rotation.y = Math.PI;
 scene.add(sunHalo);
 
-/* 5. Multi-Biome Terrain Math (Town -> River -> Mountain -> Sea -> Beach) */
+/* 5. Multi-Biome Terrain */
 function mountainTrailX(z) {
   if (z < 42 || z > 110) return 0;
   return Math.sin(((z - 42) / 68) * Math.PI * 2) * 10.5;
@@ -187,36 +187,29 @@ function mountainTrailX(z) {
 function getTerrainHeight(x, z) {
   let h = 0;
 
-  // Town Valley (Z: -25 to 17)
   if (z < 18) {
     h = 0;
-    // Rolling side hills far from town center
     const edge = Math.max(0, Math.abs(x) - 18);
     h += Math.pow(edge, 1.35) * 0.32;
   }
 
-  // Rushing River Gorge (Z: 18 to 38)
   if (z >= 17 && z <= 39) {
     const t = Math.sin(((z - 17) / 22) * Math.PI);
     h -= t * 2.1;
   }
 
-  // Mountain Pass (Z: 40 to 112)
   if (z >= 40 && z <= 112) {
     const ridgeT = Math.sin(((z - 40) / 72) * Math.PI);
     const baseHeight = Math.pow(ridgeT, 1.15) * 11.5;
     const tx = mountainTrailX(z);
     const distFromTrail = Math.abs(x - tx);
-    // Raise steep jagged cliffs outside the winding trail
-    const cliffBump = distFromTrail > 3.6 ? Math.min(9, (distFromTrail - 3.6) * 1.45) : 0;
+    const cliffBump = distFromTrail > 3.7 ? Math.min(9, (distFromTrail - 3.7) * 1.45) : 0;
     h = baseHeight + cliffBump;
   }
 
-  // Tidal Sea Cove (Z: 112 to 150)
   if (z > 112 && z <= 150) {
     const seaT = Math.sin(((z - 112) / 38) * Math.PI);
     h = -seaT * 2.3;
-    // 3 Sandbar Islands in the Cove
     const d1 = Math.hypot(x + 4.5, z - 122);
     const d2 = Math.hypot(x - 4.5, z - 132);
     const d3 = Math.hypot(x + 1.5, z - 141);
@@ -225,7 +218,6 @@ function getTerrainHeight(x, z) {
     if (d3 < 4.5) h = Math.max(h, (1 - d3 / 4.5) * 1.1 - 0.1);
   }
 
-  // Sunset Beach (Z: 150 to 166) -> Open Ocean (Z > 166)
   if (z > 150) {
     if (z <= 165) {
       const beachT = Math.sin(((z - 150) / 15) * Math.PI);
@@ -234,14 +226,12 @@ function getTerrainHeight(x, z) {
       h = -2.6;
     }
   }
-
   return h;
 }
 
-// Build Displaced Vertex-Colored Terrain Mesh
 const terrainGeo = new THREE.PlaneGeometry(96, 220, 96, 180);
 terrainGeo.rotateX(-Math.PI / 2);
-terrainGeo.translate(0, 0, 75); // Covers Z: -35 to +185
+terrainGeo.translate(0, 0, 75);
 
 const posAttr = terrainGeo.attributes.position;
 const colArr = new Float32Array(posAttr.count * 3);
@@ -262,56 +252,38 @@ for (let i = 0; i < posAttr.count; i++) {
   if (vz < 16 && Math.hypot(vx, vz + 4) < 8.6) col = cPlaza;
   else if (vz >= 17 && vz <= 39 && vy < 0.1) col = cSand;
   else if (vz >= 40 && vz <= 112) {
-    col = Math.abs(vx - mountainTrailX(vz)) < 3.5 ? (vy > 8 ? cSummit : cSand) : cMountain;
+    col = Math.abs(vx - mountainTrailX(vz)) < 3.6 ? (vy > 8 ? cSummit : cSand) : cMountain;
   } else if (vz > 112) {
     col = vy > -0.15 ? cSand : cSeaBed;
   }
 
-  colArr[i * 3] = col.r;
-  colArr[i * 3 + 1] = col.g;
-  colArr[i * 3 + 2] = col.b;
+  colArr[i * 3] = col.r; colArr[i * 3 + 1] = col.g; colArr[i * 3 + 2] = col.b;
 }
-
 terrainGeo.setAttribute("color", new THREE.BufferAttribute(colArr, 3));
 terrainGeo.computeVertexNormals();
-
-const terrainMesh = new THREE.Mesh(
-  terrainGeo,
-  toonMat(0xffffff, { vertexColors: true })
-);
+const terrainMesh = new THREE.Mesh(terrainGeo, toonMat(0xffffff, { vertexColors: true }));
 terrainMesh.receiveShadow = true;
 scene.add(terrainMesh);
 
-// Animated Ocean & River Water Plane
 const waterGeo = new THREE.PlaneGeometry(140, 220, 36, 56);
 waterGeo.rotateX(-Math.PI / 2);
 waterGeo.translate(0, SEA_LEVEL, 105);
-const waterBaseY = new Float32Array(waterGeo.attributes.position.count);
-for (let i = 0; i < waterBaseY.length; i++) waterBaseY[i] = SEA_LEVEL;
-
+const waterBaseY = new Float32Array(waterGeo.attributes.position.count).fill(SEA_LEVEL);
 const waterMesh = new THREE.Mesh(
   waterGeo,
-  new THREE.MeshToonMaterial({
-    color: 0x0ea5e9,
-    gradientMap: toonGradient,
-    transparent: true,
-    opacity: 0.84
-  })
+  new THREE.MeshToonMaterial({ color: 0x0ea5e9, gradientMap: toonGradient, transparent: true, opacity: 0.84 })
 );
 waterMesh.receiveShadow = true;
 scene.add(waterMesh);
 
-/* 6. Props, Platforms, Cottages & Landmarks */
-const colliders = [];     // { x, z, r }
-const platforms = [];     // { x, z, y, r } walkable elevated rocks
-const windParticles = [];
+/* 6. Landmarks, Stepping Rocks, Locked Gate & Falling Meteors */
+const colliders = [];
+const platforms = [];
+const activeMeteors = [];
 let petalSystem = null;
 
 function addPlatformRock(x, z, y, r = 1.7) {
-  const rock = new THREE.Mesh(
-    new THREE.CylinderGeometry(r * 0.92, r * 1.1, 1.4, 7),
-    toonMat(0x94a3b8)
-  );
+  const rock = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 1.1, 1.4, 7), toonMat(0x94a3b8));
   rock.position.set(x, y - 0.7, z);
   rock.castShadow = true;
   rock.receiveShadow = true;
@@ -324,23 +296,13 @@ function createCottage(x, z, wallColor, roofColor, rotY = 0) {
   const base = new THREE.Mesh(new THREE.BoxGeometry(5.2, 3.6, 4.4), toonMat(wallColor));
   base.position.y = 1.8;
   base.castShadow = true;
-  base.receiveShadow = true;
-  g.add(base);
-
   const roof = new THREE.Mesh(new THREE.ConeGeometry(4.2, 2.5, 4), toonMat(roofColor));
   roof.position.y = 4.8;
   roof.rotation.y = Math.PI / 4;
   roof.castShadow = true;
-  g.add(roof);
-
-  // Warm Glowing Anime Window
-  const win = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.1, 1.2),
-    new THREE.MeshBasicMaterial({ color: 0xfef08a })
-  );
+  const win = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.2), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
   win.position.set(0, 2.0, 2.22);
-  g.add(win);
-
+  g.add(base, roof, win);
   g.position.set(x, getTerrainHeight(x, z), z);
   g.rotation.y = rotY;
   scene.add(g);
@@ -349,12 +311,9 @@ function createCottage(x, z, wallColor, roofColor, rotY = 0) {
 
 function createStylizedTree(x, z, type = "sakura") {
   const g = new THREE.Group();
-  const y = getTerrainHeight(x, z);
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.42, 2.8, 7), toonMat(0x78350f));
   trunk.position.y = 1.4;
   trunk.castShadow = true;
-  g.add(trunk);
-
   const c1 = type === "sakura" ? 0xf9a8d4 : 0x16a34a;
   const c2 = type === "sakura" ? 0xf472b6 : 0x22c55e;
   const canopy1 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.9), toonMat(c1));
@@ -363,41 +322,29 @@ function createStylizedTree(x, z, type = "sakura") {
   const canopy2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.3), toonMat(c2));
   canopy2.position.set(0.85, 2.9, 0.4);
   canopy2.castShadow = true;
-  g.add(canopy1, canopy2);
-
-  g.position.set(x, y, z);
+  g.add(trunk, canopy1, canopy2);
+  g.position.set(x, getTerrainHeight(x, z), z);
   scene.add(g);
   colliders.push({ x, z, r: 0.9 });
 }
 
-function createStreetLamp(x, z) {
-  const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.6), toonMat(0x1e293b));
-  pole.position.y = 1.8;
-  const bulb = new THREE.Mesh(
-    new THREE.SphereGeometry(0.28, 10, 10),
-    new THREE.MeshBasicMaterial({ color: 0xfef08a })
-  );
-  bulb.position.y = 3.7;
-  g.add(pole, bulb);
-  g.position.set(x, getTerrainHeight(x, z), z);
-  scene.add(g);
-}
-
-// Build Town Landmarks
+// Town Buildings & Lamps
 createCottage(-14, -10, 0xfef3c7, 0xf43f5e, 0.4);
 createCottage(14, -10, 0xe0f2fe, 0x6366f1, -0.4);
 createCottage(-14, 3, 0xfce7f3, 0xfb7185, 1.2);
-createStreetLamp(-6.5, -1);
-createStreetLamp(6.5, -1);
-createStreetLamp(-2.5, 16);
-createStreetLamp(2.5, 16);
+
+[[-6.5, -1], [6.5, -1], [-2.5, 16], [2.5, 16]].forEach(([lx, lz]) => {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.6), toonMat(0x1e293b));
+  pole.position.set(lx, 1.8, lz);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.28, 10, 10), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+  bulb.position.set(lx, 3.7, lz);
+  scene.add(pole, bulb);
+});
 
 // Florist Stall
 const stall = new THREE.Group();
 const counter = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.1, 1.4), toonMat(0xb45309));
 counter.position.y = 0.55;
-counter.castShadow = true;
 const awning = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.25, 2.1), toonMat(0xf43f5e));
 awning.position.set(0, 2.7, 0.1);
 awning.rotation.x = 0.2;
@@ -407,44 +354,50 @@ stall.rotation.y = Math.PI / 3;
 scene.add(stall);
 colliders.push({ x: -9.5, z: -4.5, r: 1.9 });
 
-// Broken Bridge Piers (Z = 18 & 38)
+// Broken Bridge Piers
 [18, 38].forEach((bz) => {
   const pier = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.5, 2.2), toonMat(0x78350f));
   pier.position.set(0, 0.2, bz);
-  pier.castShadow = true;
   scene.add(pier);
 });
 
-// River Stepping Stone Rocks (Challenge: hop across or swim current!)
+// River Stepping Stones + Scarf Island
 addPlatformRock(-1.6, 22.0, 0.1, 1.5);
 addPlatformRock(1.4, 25.5, 0.1, 1.5);
-addPlatformRock(-5.8, 28.0, 0.25, 2.1); // Scarf Island!
+addPlatformRock(-5.8, 28.0, 0.25, 2.1);
 addPlatformRock(0.8, 30.5, 0.1, 1.5);
 addPlatformRock(-1.2, 34.5, 0.1, 1.5);
 
-// Summit Shrine on Mountain Peak (0, 76)
-const summitY = getTerrainHeight(0, 76);
-const shrine = new THREE.Group();
-const shrineBase = new THREE.Mesh(new THREE.CylinderGeometry(2.8, 3.2, 0.5, 8), toonMat(0xe2e8f0));
-const toriiL = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 4.2), toonMat(0xf43f5e));
-toriiL.position.set(-1.6, 2.1, 0);
-const toriiR = toriiL.clone();
-toriiR.position.set(1.6, 2.1, 0);
-const toriiTop = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.45, 0.55), toonMat(0xf43f5e));
-toriiTop.position.set(0, 4.1, 0);
-shrine.add(shrineBase, toriiL, toriiR, toriiTop);
-shrine.position.set(0, summitY, 76);
-scene.add(shrine);
+// East Cliff Overlook Ledge for Sky Key (Jump up onto this ledge!)
+const keyCliffY = getTerrainHeight(10.5, 59) + 0.95;
+addPlatformRock(14.2, 59, keyCliffY, 2.3);
 
-// Trees across Town & Mountain Ridge
+// Summit Torii Gate & Barrier Door (Z = 75)
+const summitY = getTerrainHeight(0, 76);
+const gateGroup = new THREE.Group();
+const toriiL = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.24, 4.4), toonMat(0xf43f5e));
+toriiL.position.set(-2.1, 2.2, 0);
+const toriiR = toriiL.clone();
+toriiR.position.set(2.1, 2.2, 0);
+const toriiTop = new THREE.Mesh(new THREE.BoxGeometry(5.6, 0.5, 0.65), toonMat(0xf43f5e));
+toriiTop.position.set(0, 4.3, 0);
+const gateDoor = new THREE.Mesh(
+  new THREE.BoxGeometry(3.8, 3.6, 0.35),
+  new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.5 })
+);
+gateDoor.position.set(0, 1.8, 0);
+gateGroup.add(toriiL, toriiR, toriiTop, gateDoor);
+gateGroup.position.set(0, summitY, 75);
+scene.add(gateGroup);
+
 [
   [-12, -15, "sakura"], [12, -15, "sakura"], [13, 3, "sakura"],
   [-9, 10, "pine"], [9, 10, "sakura"], [-12, 46, "pine"], [12, 48, "pine"],
   [-15, 76, "sakura"], [15, 76, "sakura"], [-11, 102, "pine"], [11, 104, "sakura"]
 ].forEach(([x, z, t]) => createStylizedTree(x, z, t));
 
-/* 7. Anime Character Builder (with Ink Outlines & Sitting Pose) */
-function addInkOutline(mesh, scale = 1.08) {
+/* 7. Anime Characters (Eric, Jane & Sora) */
+function addInkOutline(mesh, scale = 1.07) {
   const outline = new THREE.Mesh(
     mesh.geometry,
     new THREE.MeshBasicMaterial({ color: 0x0f172a, side: THREE.BackSide })
@@ -455,15 +408,13 @@ function addInkOutline(mesh, scale = 1.08) {
 
 function createAnimeCharacter({ coat, pants, hair, skin = 0xfed7aa, isDress = false, scarf = null }) {
   const g = new THREE.Group();
-
   const legGeo = new THREE.BoxGeometry(0.22, 0.85, 0.24);
-  legGeo.translate(0, -0.425, 0); // Pivot at hip for clean sitting & walking!
+  legGeo.translate(0, -0.425, 0);
   const legMat = toonMat(isDress ? skin : pants);
 
   const leftLeg = new THREE.Mesh(legGeo, legMat);
   leftLeg.position.set(-0.15, 0.85, 0);
   leftLeg.castShadow = true;
-
   const rightLeg = new THREE.Mesh(legGeo, legMat);
   rightLeg.position.set(0.15, 0.85, 0);
   rightLeg.castShadow = true;
@@ -475,7 +426,7 @@ function createAnimeCharacter({ coat, pants, hair, skin = 0xfed7aa, isDress = fa
   );
   torso.position.y = isDress ? 1.15 : 1.28;
   torso.castShadow = true;
-  addInkOutline(torso, 1.06);
+  addInkOutline(torso);
   g.add(torso);
 
   if (scarf) {
@@ -496,7 +447,7 @@ function createAnimeCharacter({ coat, pants, hair, skin = 0xfed7aa, isDress = fa
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), toonMat(skin));
   head.position.y = 2.02;
   head.castShadow = true;
-  addInkOutline(head, 1.06);
+  addInkOutline(head);
   g.add(head);
 
   const hairCap = new THREE.Mesh(
@@ -538,7 +489,6 @@ function setCharacterSitting(char, isSitting) {
 function animateCharacterPose(char, isMoving, isSwimming, dt) {
   const u = char.userData;
   if (u.sitting) return;
-
   if (isSwimming) {
     u.walkCycle += dt * 7;
     u.leftArm.rotation.x = -Math.PI / 2 + Math.sin(u.walkCycle) * 0.7;
@@ -548,32 +498,28 @@ function animateCharacterPose(char, isMoving, isSwimming, dt) {
   } else if (isMoving) {
     u.walkCycle += dt * 10;
     const s = Math.sin(u.walkCycle) * 0.55;
-    u.leftLeg.rotation.x = s;
-    u.rightLeg.rotation.x = -s;
-    u.leftArm.rotation.x = -s * 0.75;
-    u.rightArm.rotation.x = s * 0.75;
+    u.leftLeg.rotation.x = s; u.rightLeg.rotation.x = -s;
+    u.leftArm.rotation.x = -s * 0.75; u.rightArm.rotation.x = s * 0.75;
   } else {
-    u.leftLeg.rotation.x *= 0.84;
-    u.rightLeg.rotation.x *= 0.84;
-    u.leftArm.rotation.x *= 0.84;
-    u.rightArm.rotation.x *= 0.84;
+    u.leftLeg.rotation.x *= 0.84; u.rightLeg.rotation.x *= 0.84;
+    u.leftArm.rotation.x *= 0.84; u.rightArm.rotation.x *= 0.84;
   }
 }
 
-/* 8. Actors & Quest Keepsakes */
-const player = createAnimeCharacter({ coat: 0x3b82f6, pants: 0x1e293b, hair: 0x0f172a });
-player.position.set(-1.3, 0, -4);
-player.rotation.y = Math.PI / 2;
+// Cast: Eric (Player), Jane, Sora
+const eric = createAnimeCharacter({ coat: 0x3b82f6, pants: 0x1e293b, hair: 0x0f172a });
+eric.position.set(-1.3, 0, -4);
+eric.rotation.y = Math.PI / 2;
 
-const maya = createAnimeCharacter({ coat: 0xfb7185, hair: 0x451a03, isDress: true, scarf: 0xf43f5e });
-maya.position.set(1.3, 0, -4);
-maya.rotation.y = -Math.PI / 2;
+const jane = createAnimeCharacter({ coat: 0xfb7185, hair: 0x451a03, isDress: true, scarf: 0xf43f5e });
+jane.position.set(1.3, 0, -4);
+jane.rotation.y = -Math.PI / 2;
 
-const clara = createAnimeCharacter({ coat: 0xfbbf24, hair: 0x78350f, isDress: true });
-clara.position.set(-8.0, 0, -3.2);
-clara.rotation.y = Math.PI / 3;
+const sora = createAnimeCharacter({ coat: 0xfbbf24, hair: 0x78350f, isDress: true });
+sora.position.set(-8.0, 0, -3.2);
+sora.rotation.y = Math.PI / 3;
 
-// Quest Keepsakes
+/* 8. Quest Collectibles & Waypoint */
 const scarfItem = new THREE.Mesh(
   new THREE.TorusKnotGeometry(0.32, 0.09, 36, 8),
   new THREE.MeshBasicMaterial({ color: 0xf43f5e })
@@ -582,23 +528,22 @@ scarfItem.position.set(-5.8, 0.9, 28);
 scarfItem.visible = false;
 scene.add(scarfItem);
 
+const keyItem = new THREE.Mesh(
+  new THREE.TorusGeometry(0.32, 0.09, 8, 16),
+  new THREE.MeshBasicMaterial({ color: 0xfde047 })
+);
+keyItem.position.set(14.2, keyCliffY + 0.9, 59);
+keyItem.visible = false;
+scene.add(keyItem);
+
 const locketItem = new THREE.Mesh(
   new THREE.OctahedronGeometry(0.4),
   new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
 );
-locketItem.position.set(0, summitY + 1.1, 76);
+locketItem.position.set(0, summitY + 1.1, 78);
 locketItem.visible = false;
 scene.add(locketItem);
 
-const shellItem = new THREE.Mesh(
-  new THREE.DodecahedronGeometry(0.38),
-  new THREE.MeshBasicMaterial({ color: 0xfde047 })
-);
-shellItem.position.set(4.5, getTerrainHeight(4.5, 132) + 0.85, 132);
-shellItem.visible = false;
-scene.add(shellItem);
-
-// Waypoint Light Pillar
 const beacon = new THREE.Mesh(
   new THREE.CylinderGeometry(0.5, 0.5, 22, 16, 1, true),
   new THREE.MeshBasicMaterial({ color: 0xfbbf24, transparent: true, opacity: 0.25, side: THREE.DoubleSide, depthWrite: false })
@@ -606,7 +551,28 @@ const beacon = new THREE.Mesh(
 beacon.visible = false;
 scene.add(beacon);
 
-/* 9. Color Filter & Petals */
+/* 9. Falling Meteor Hazards (Mountain Challenge!) */
+function spawnMeteorNearPlayer() {
+  const tx = eric.position.x + (Math.random() - 0.5) * 5;
+  const tz = eric.position.z + (Math.random() - 0.5) * 6 + 2;
+  const ty = getTerrainHeight(tx, tz);
+
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(1.1, 1.5, 24),
+    new THREE.MeshBasicMaterial({ color: 0xef4444, side: THREE.DoubleSide, transparent: true, opacity: 0.8 })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(tx, ty + 0.15, tz);
+  scene.add(ring);
+
+  const rock = new THREE.Mesh(new THREE.DodecahedronGeometry(0.75), toonMat(0x475569));
+  rock.position.set(tx, ty + 18, tz);
+  scene.add(rock);
+
+  activeMeteors.push({ ring, rock, tx, ty, tz, timer: 1.35, hit: false });
+}
+
+/* 10. Color Filter & Petals */
 function setWorldGrayscale(pct) {
   state.grayscale = pct;
   canvas.style.filter = `grayscale(${pct}%) contrast(${pct > 50 ? 1.08 : 1}) saturate(${pct === 0 ? 1.18 : 1})`;
@@ -614,16 +580,16 @@ function setWorldGrayscale(pct) {
 }
 
 function spawnColorPetals() {
-  const count = 120;
+  const count = 130;
   const geo = new THREE.BufferGeometry();
   const pos = new Float32Array(count * 3);
   const cols = new Float32Array(count * 3);
   const pal = [new THREE.Color(0xfb7185), new THREE.Color(0xfbbf24), new THREE.Color(0x38bdf8), new THREE.Color(0xc084fc)];
 
   for (let i = 0; i < count; i++) {
-    pos[i * 3] = player.position.x + (Math.random() - 0.5) * 18;
-    pos[i * 3 + 1] = player.position.y + Math.random() * 8 + 0.5;
-    pos[i * 3 + 2] = player.position.z + (Math.random() - 0.5) * 18;
+    pos[i * 3] = eric.position.x + (Math.random() - 0.5) * 18;
+    pos[i * 3 + 1] = eric.position.y + Math.random() * 8 + 0.5;
+    pos[i * 3 + 2] = eric.position.z + (Math.random() - 0.5) * 18;
     const c = pal[i % pal.length];
     cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b;
   }
@@ -633,7 +599,7 @@ function spawnColorPetals() {
   scene.add(petalSystem);
 }
 
-/* 10. Dialogue & Quest Flow */
+/* 11. Dialogue & Quest UI */
 function startDialogue(lines, onComplete = null) {
   state.dialogueActive = true;
   state.dialogueQueue = lines;
@@ -697,7 +663,10 @@ function updateQuestUI(step) {
   const info = QUEST_INFO[step];
   document.getElementById("questTitle").textContent = info.title;
   document.getElementById("questDesc").textContent = info.desc;
-  document.getElementById("compassLine").hidden = step === 0 || step === 6;
+  document.getElementById("compassLine").hidden = step === 0 || step === 7;
+  document.getElementById("badgeScarf").classList.toggle("owned", state.hasScarf);
+  document.getElementById("badgeKey").classList.toggle("owned", state.hasKey);
+  document.getElementById("badgeLocket").classList.toggle("owned", state.hasLocket);
 }
 
 function showAlert(msg, ms = 2400) {
@@ -708,7 +677,7 @@ function showAlert(msg, ms = 2400) {
   el._timer = setTimeout(() => { el.hidden = true; }, ms);
 }
 
-/* 11. Story Cutscenes */
+/* 12. Cutscenes & Interactions */
 function beginOpeningQuarrel() {
   state.phase = "QUARREL";
   document.getElementById("hud").hidden = false;
@@ -717,27 +686,26 @@ function beginOpeningQuarrel() {
 
   startDialogue(
     [
-      { speaker: "Maya", role: "Hurt", text: "You promised we'd watch the sunset by the ocean together, Leo. Instead you shut me out all day." },
-      { speaker: "Leo", role: "You", text: "I had a lot on my mind! Why can't you just give me space without turning it into a drama?" },
-      { speaker: "Maya", role: "", text: "...You're right. Maybe I shouldn't keep asking someone to care when they don't want to." },
-      { speaker: "Maya", role: "", text: "Goodbye, Leo. Don't follow me." }
+      { speaker: "Jane", role: "Hurt", text: "You kept talking about your dreams, Eric, and forgot I was standing right next to you." },
+      { speaker: "Eric", role: "You", text: "I'm working hard for both of us, Jane! Why can't you see how stressed I am?" },
+      { speaker: "Jane", role: "", text: "I believed in you when nobody else did. Now I just feel completely alone beside you." },
+      { speaker: "Jane", role: "", text: "I'm going away. Don't bother looking for me." }
     ],
     () => {
-      state.phase = "LADY_LEAVING";
-      document.getElementById("questDesc").textContent = "Maya is leaving town...";
+      state.phase = "JANE_LEAVING";
+      document.getElementById("questDesc").textContent = "Jane is walking away...";
       AudioEngine.colorDrain();
       setWorldGrayscale(100);
     }
   );
 }
 
-function finishLadyLeaving() {
-  // Place Maya sitting on the distant Sunset Beach facing the ocean sun (+Z)
+function finishJaneLeaving() {
   const beachZ = 158;
   const beachY = getTerrainHeight(0, beachZ);
-  maya.position.set(0, beachY - 0.55, beachZ);
-  maya.rotation.y = 0; // Facing +Z (towards the giant sunset)
-  setCharacterSitting(maya, true);
+  jane.position.set(0, beachY - 0.55, beachZ);
+  jane.rotation.y = 0; // Facing +Z toward sunset ocean
+  setCharacterSitting(jane, true);
 
   state.phase = "EXPLORE";
   updateQuestUI(1);
@@ -748,67 +716,74 @@ function finishLadyLeaving() {
   }
 
   startDialogue([
-    { speaker: "Leo", role: "Inner Voice", text: "Everything... just turned black and white." },
-    { speaker: "Leo", role: "Inner Voice", text: "I didn't mean to push her away. I have to find Maya—no matter how far she went." }
+    { speaker: "Eric", role: "Inner Voice", text: "The whole world just turned black and white..." },
+    { speaker: "Eric", role: "Inner Voice", text: "I was wrong. No matter how far she went, I have to find Jane and tell her I'm sorry." }
   ]);
 }
 
 function interactWithTarget(target) {
-  if (target.id === "clara" && state.questStep === 1) {
+  if (target.id === "sora" && state.questStep === 1) {
     startDialogue(
       [
-        { speaker: "Clara", role: "Florist", text: "Leo! Maya ran north out of town—she looked heartbroken." },
-        { speaker: "Clara", role: "Florist", text: "The river bridge collapsed in yesterday's storm, so you'll have to hop across the rocks or swim through the current!" },
-        { speaker: "Clara", role: "Florist", text: "I saw her red scarf catch on a rock out in the river. Start there, then follow the mountain pass toward the sea!" }
+        { speaker: "Sora", role: "Town Florist", text: "Eric! Jane hurried north out of town crying—the river bridge collapsed in the storm, so she took the rocks!" },
+        { speaker: "Sora", role: "Town Florist", text: "I saw her red scarf snag out in the rushing river. Watch your stamina against the current, and watch out for falling meteors on the mountain!" }
       ],
       () => {
         scarfItem.visible = true;
         updateQuestUI(2);
       }
     );
-  } else if (target.id === "clara") {
-    startDialogue([{ speaker: "Clara", role: "Florist", text: "Follow the golden light north—watch your stamina in the river and brace against mountain winds!" }]);
+  } else if (target.id === "sora") {
+    startDialogue([{ speaker: "Sora", role: "Town Florist", text: "Follow the golden beacon north, Eric. She's waiting beyond the ridge by the ocean!" }]);
   } else if (target.id === "scarf" && state.questStep === 2) {
     scarfItem.visible = false;
+    state.hasScarf = true;
     AudioEngine.sparkle();
     setWorldGrayscale(75);
-    locketItem.visible = true;
+    keyItem.visible = true;
     updateQuestUI(3);
     startDialogue([
-      { speaker: "Leo", role: "", text: "I got her crimson scarf! A tiny bit of warmth returned to the world." },
-      { speaker: "Leo", role: "", text: "The footprints lead straight up the Storm Ridge mountains. Time to climb." }
+      { speaker: "Eric", role: "", text: "Jane's Red Scarf... Holding it brings back a spark of color." },
+      { speaker: "Eric", role: "", text: "The path ahead climbs Storm Ridge, and the Summit Gate is locked. I need the Sky Key from the East Cliff ledge!" }
     ]);
-  } else if (target.id === "locket" && state.questStep === 3) {
-    locketItem.visible = false;
+  } else if (target.id === "key" && state.questStep === 3) {
+    keyItem.visible = false;
+    state.hasKey = true;
     AudioEngine.sparkle();
-    setWorldGrayscale(45);
-    shellItem.visible = true;
+    setWorldGrayscale(55);
     updateQuestUI(4);
-    startDialogue([
-      { speaker: "Leo", role: "", text: "Her Silver Locket! Look from up here—I can see the ocean past the ridge." },
-      { speaker: "Leo", role: "", text: "She must be down at the beach beyond the Tidal Cove!" }
-    ]);
-  } else if (target.id === "shell" && state.questStep === 4) {
-    shellItem.visible = false;
+    startDialogue([{ speaker: "Eric", role: "", text: "Got the Sky Key! Now I can unlock the Summit Torii Gate at the top of the ridge!" }]);
+  } else if (target.id === "gate" && state.questStep === 4) {
+    state.gateUnlocked = true;
+    gateDoor.visible = false;
+    locketItem.visible = true;
     AudioEngine.sparkle();
-    setWorldGrayscale(25);
+    showAlert("🗝️ Summit Gate Unlocked!", 2200);
+    interactWithTarget({ id: "gate_unlocked" });
+  } else if (target.id === "locket" && state.questStep === 4) {
+    locketItem.visible = false;
+    state.hasLocket = true;
+    AudioEngine.sparkle();
+    setWorldGrayscale(30);
     updateQuestUI(5);
-    startDialogue([{ speaker: "Leo", role: "", text: "Just across the last stretch of water... I can see her sitting on the beach ahead!" }]);
-  } else if (target.id === "maya" && state.questStep === 5) {
     startDialogue([
-      { speaker: "Maya", role: "Looking at the ocean", text: "...I thought I told you not to follow me, Leo." },
-      { speaker: "Maya", role: "", text: "Wait—you crossed the river and climbed the storm ridge just to get here?" },
+      { speaker: "Eric", role: "", text: "Her Silver Locket! Look past the cliffs—I can see the Tidal Cove and the beach!" },
+      { speaker: "Eric", role: "", text: "Swim across the sandbars to reach Jane before the sun sets!" }
+    ]);
+  } else if (target.id === "jane" && (state.questStep === 5 || state.questStep === 6)) {
+    startDialogue([
+      { speaker: "Jane", role: "Facing the sunset", text: "...Eric? You actually climbed the ridge and swam all the way out here?" },
       {
-        speaker: "Leo",
-        role: "Speak from the heart",
-        text: "Stand beside Maya and choose what to say:",
+        speaker: "Eric",
+        role: "Say what you couldn't before",
+        text: "Stand beside Jane and speak from your heart:",
         choices: [
           {
-            label: "1. \"I'm so sorry, Maya. My world literally lost all its color the moment you walked away.\"",
+            label: "1. \"I'm sorry, Jane. No words can describe how sorry I feel. Seeing things from your perspective saddens me.\"",
             onPick: () => triggerSunsetFinale()
           },
           {
-            label: "2. \"You were right. I took you for granted, and I brought back everything you left behind.\"",
+            label: "2. \"My world had no color without you. I'm truly sorry for taking you for granted.\"",
             onPick: () => triggerSunsetFinale()
           }
         ]
@@ -818,25 +793,25 @@ function interactWithTarget(target) {
 }
 
 function triggerSunsetFinale() {
-  // Leo sits right beside Maya facing the sunset!
   const beachY = getTerrainHeight(1.2, 158);
-  player.position.set(1.2, beachY - 0.55, 158);
-  player.rotation.y = 0;
-  setCharacterSitting(player, true);
+  eric.position.set(1.2, beachY - 0.55, 158);
+  eric.rotation.y = 0;
+  setCharacterSitting(eric, true);
 
   startDialogue(
     [
-      { speaker: "Leo", role: "", text: "I brought your scarf, your locket, and a promise to truly listen from now on. I'm really sorry." },
-      { speaker: "Maya", role: "Tearing up, smiling", text: "You're soaked, exhausted, and covered in mountain dust... and you still kept your promise to watch the sunset with me." },
-      { speaker: "Maya", role: "", text: "Sit down with me, Leo. Let's watch it together." }
+      { speaker: "Eric", role: "", text: "I brought your scarf and your locket. As long as we hold tight and walk together, I won't ever let go again." },
+      { speaker: "Jane", role: "Smiling with tears", text: "You really went through all of that just to say you're sorry..." },
+      { speaker: "Jane", role: "", text: "Sit down with me, Eric. Look at the sunset." }
     ],
     () => {
       AudioEngine.colorReturn();
       setWorldGrayscale(0);
       spawnColorPetals();
-      updateQuestUI(6);
+      updateQuestUI(7);
       state.phase = "ENDING";
       document.getElementById("staminaBox").hidden = true;
+      renderSavedNotes();
       setTimeout(() => {
         document.getElementById("endingOverlay").hidden = false;
       }, 2200);
@@ -844,11 +819,11 @@ function triggerSunsetFinale() {
   );
 }
 
-/* 12. Support Height, Slope Check & Interactables */
+/* 13. Support Height, Gate Blocking & Interactables */
 function getSupportHeight(x, z, currentY) {
   let y = getTerrainHeight(x, z);
   for (const p of platforms) {
-    if (Math.hypot(x - p.x, z - p.z) <= p.r && currentY >= p.y - 0.9) {
+    if (Math.hypot(x - p.x, z - p.z) <= p.r && currentY >= p.y - 0.95) {
       y = Math.max(y, p.y);
     }
   }
@@ -857,46 +832,79 @@ function getSupportHeight(x, z, currentY) {
 
 function canMoveTo(nx, nz, currentY) {
   if (nx < -36 || nx > 36 || nz < -24 || nz > 165) return false;
+  if (!state.gateUnlocked && nz >= 74.2 && nz <= 76.2 && Math.abs(nx) < 4.5) return false;
   for (const c of colliders) {
     if (Math.hypot(nx - c.x, nz - c.z) < c.r) return false;
   }
-  const targetH = getSupportHeight(nx, nz, currentY);
-  // Prevent walking straight up sheer vertical mountain cliffs
-  if (targetH - currentY > 0.85) return false;
+  if (getSupportHeight(nx, nz, currentY) - currentY > 0.85) return false;
   return true;
 }
 
 function getCurrentObjectivePos() {
-  if (state.questStep === 1) return { x: clara.position.x, z: clara.position.z };
+  if (state.questStep === 1) return { x: sora.position.x, z: sora.position.z };
   if (state.questStep === 2) return { x: scarfItem.position.x, z: scarfItem.position.z };
-  if (state.questStep === 3) return { x: locketItem.position.x, z: locketItem.position.z };
-  if (state.questStep === 4) return { x: shellItem.position.x, z: shellItem.position.z };
-  if (state.questStep === 5) return { x: maya.position.x, z: maya.position.z };
+  if (state.questStep === 3) return { x: keyItem.position.x, z: keyItem.position.z };
+  if (state.questStep === 4) {
+    return state.gateUnlocked
+      ? { x: locketItem.position.x, z: locketItem.position.z }
+      : { x: 0, z: 74 };
+  }
+  if (state.questStep === 5 || state.questStep === 6) return { x: jane.position.x, z: jane.position.z };
   return null;
 }
 
 function findNearbyInteractable() {
   if (state.phase !== "EXPLORE" || state.dialogueActive) return null;
-  const px = player.position.x;
-  const pz = player.position.z;
+  const px = eric.position.x;
+  const pz = eric.position.z;
 
-  if (Math.hypot(px - clara.position.x, pz - clara.position.z) < 3.2) return { id: "clara", label: "Talk to Clara" };
+  if (Math.hypot(px - sora.position.x, pz - sora.position.z) < 3.2) return { id: "sora", label: "Talk to Sora" };
   if (state.questStep === 2 && scarfItem.visible && Math.hypot(px - scarfItem.position.x, pz - scarfItem.position.z) < 2.6) {
-    return { id: "scarf", label: "Grab Crimson Scarf" };
+    return { id: "scarf", label: "Take Red Scarf" };
   }
-  if (state.questStep === 3 && locketItem.visible && Math.hypot(px - locketItem.position.x, pz - locketItem.position.z) < 2.8) {
-    return { id: "locket", label: "Take Silver Locket" };
+  if (state.questStep === 3 && keyItem.visible && Math.hypot(px - keyItem.position.x, pz - keyItem.position.z) < 2.6) {
+    return { id: "key", label: "Pick up Sky Key" };
   }
-  if (state.questStep === 4 && shellItem.visible && Math.hypot(px - shellItem.position.x, pz - shellItem.position.z) < 2.8) {
-    return { id: "shell", label: "Pick up Tide Shell" };
+  if (state.questStep === 4 && !state.gateUnlocked && Math.hypot(px, pz - 74.2) < 3.2) {
+    return { id: "gate", label: "Unlock Summit Gate" };
   }
-  if (state.questStep === 5 && Math.hypot(px - maya.position.x, pz - maya.position.z) < 3.4) {
-    return { id: "maya", label: "Speak to Maya" };
+  if (state.questStep === 4 && state.gateUnlocked && locketItem.visible && Math.hypot(px - locketItem.position.x, pz - locketItem.position.z) < 2.8) {
+    return { id: "locket", label: "Claim Silver Locket" };
+  }
+  if ((state.questStep === 5 || state.questStep === 6) && Math.hypot(px - jane.position.x, pz - jane.position.z) < 3.5) {
+    return { id: "jane", label: "Speak to Jane" };
   }
   return null;
 }
 
-/* 13. Input Events */
+/* 14. Sorry Note Tribute Wall */
+function renderSavedNotes() {
+  const wrap = document.getElementById("savedNotes");
+  let notes = [];
+  try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || "[]"); } catch {}
+  wrap.innerHTML = "";
+  notes.slice(0, 4).forEach((txt) => {
+    const div = document.createElement("div");
+    div.className = "saved-note-item";
+    div.textContent = `"${txt}"`;
+    wrap.appendChild(div);
+  });
+}
+
+document.getElementById("noteForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const input = document.getElementById("sorryNoteInput");
+  const val = input.value.trim();
+  if (!val) return;
+  let notes = [];
+  try { notes = JSON.parse(localStorage.getItem(NOTES_KEY) || "[]"); } catch {}
+  notes.unshift(val);
+  localStorage.setItem(NOTES_KEY, JSON.stringify(notes.slice(0, 10)));
+  input.value = "";
+  renderSavedNotes();
+});
+
+/* 15. Input Listeners */
 window.addEventListener("keydown", (e) => {
   AudioEngine.unlock();
   const k = e.key.toLowerCase();
@@ -908,17 +916,15 @@ window.addEventListener("keydown", (e) => {
       advanceDialogue();
     } else if (e.key === " " && state.phase === "EXPLORE" && state.grounded && !state.isSwimming) {
       e.preventDefault();
-      state.velY = 9.2;
+      state.velY = 9.4;
       state.grounded = false;
       AudioEngine.jump();
     }
   }
-
   if (k === "e" && state.nearbyInteractable && !state.dialogueActive) {
     interactWithTarget(state.nearbyInteractable);
   }
 });
-
 window.addEventListener("keyup", (e) => { state.keys[e.key.toLowerCase()] = false; });
 
 document.getElementById("dialogueBox").addEventListener("click", () => { AudioEngine.unlock(); advanceDialogue(); });
@@ -934,7 +940,7 @@ document.getElementById("mobileActionBtn").addEventListener("click", () => {
 document.getElementById("mobileJumpBtn").addEventListener("click", () => {
   AudioEngine.unlock();
   if (state.phase === "EXPLORE" && state.grounded && !state.isSwimming) {
-    state.velY = 9.2;
+    state.velY = 9.4;
     state.grounded = false;
     AudioEngine.jump();
   }
@@ -976,7 +982,7 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-/* 14. Main Game Loop */
+/* 16. Main Loop */
 const clock = new THREE.Clock();
 
 function animate() {
@@ -984,19 +990,16 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const elapsed = clock.getElapsedTime();
 
-  // Animate Ocean & River Waves
+  // Ocean & River Waves
   const wPos = waterGeo.attributes.position;
   for (let i = 0; i < wPos.count; i++) {
-    const wx = wPos.getX(i);
-    const wz = wPos.getZ(i);
-    wPos.setY(i, waterBaseY[i] + Math.sin(elapsed * 2.2 + wx * 0.25 + wz * 0.2) * 0.09);
+    wPos.setY(i, waterBaseY[i] + Math.sin(elapsed * 2.2 + wPos.getX(i) * 0.25 + wPos.getZ(i) * 0.2) * 0.09);
   }
   wPos.needsUpdate = true;
 
-  // Floating Keepsakes
   if (scarfItem.visible) { scarfItem.rotation.y += dt * 2.5; scarfItem.position.y = 0.9 + Math.sin(elapsed * 3) * 0.14; }
+  if (keyItem.visible) { keyItem.rotation.y += dt * 2.5; keyItem.position.y = keyCliffY + 0.9 + Math.sin(elapsed * 3) * 0.14; }
   if (locketItem.visible) { locketItem.rotation.y += dt * 2.5; locketItem.position.y = summitY + 1.1 + Math.sin(elapsed * 3) * 0.14; }
-  if (shellItem.visible) { shellItem.rotation.y += dt * 2.5; shellItem.position.y = getTerrainHeight(4.5, 132) + 0.85 + Math.sin(elapsed * 3) * 0.14; }
 
   if (petalSystem) {
     const pAttr = petalSystem.geometry.attributes.position;
@@ -1009,49 +1012,75 @@ function animate() {
     pAttr.needsUpdate = true;
   }
 
-  // Opening Cutscene: Maya leaves town across the bridge ruins
-  if (state.phase === "LADY_LEAVING") {
-    maya.position.x += (0 - maya.position.x) * dt * 1.6;
-    maya.position.z += dt * 4.8;
-    maya.rotation.y = 0;
-    animateCharacterPose(maya, true, false, dt);
-    if (maya.position.z >= 18.5) {
-      animateCharacterPose(maya, false, false, dt);
-      finishLadyLeaving();
+  // Active Falling Meteors
+  for (let i = activeMeteors.length - 1; i >= 0; i--) {
+    const m = activeMeteors[i];
+    m.timer -= dt;
+    m.rock.position.y = m.ty + Math.max(0, (m.timer / 1.35) * 18);
+    m.rock.rotation.x += dt * 4;
+    if (m.timer <= 0) {
+      if (!m.hit && Math.hypot(eric.position.x - m.tx, eric.position.z - m.tz) < 1.85) {
+        m.hit = true;
+        AudioEngine.hit();
+        state.stamina = Math.max(10, state.stamina - 28);
+        eric.position.z -= 1.6;
+        showAlert("☄️ Hit by a falling meteor!", 1800);
+      }
+      scene.remove(m.ring, m.rock);
+      activeMeteors.splice(i, 1);
     }
   }
 
-  // Player Exploration Physics (Walk / Jump / Swim / Wind Gusts)
+  // Cutscene: Jane walks away
+  if (state.phase === "JANE_LEAVING") {
+    jane.position.x += (0 - jane.position.x) * dt * 1.6;
+    jane.position.z += dt * 4.8;
+    jane.rotation.y = 0;
+    animateCharacterPose(jane, true, false, dt);
+    if (jane.position.z >= 18.5) {
+      animateCharacterPose(jane, false, false, dt);
+      finishJaneLeaving();
+    }
+  }
+
   let playerMoving = false;
   if (state.phase === "EXPLORE" && !state.dialogueActive) {
     if (state.keys["q"]) state.camYaw += dt * 2.0;
 
-    // Update Zone Label
-    const pz = player.position.z;
+    const pz = eric.position.z;
     document.getElementById("zoneLabel").textContent =
       pz < 17 ? "Sunset Town" : pz < 40 ? "Rushing River" : pz < 112 ? "Storm Ridge" : pz < 150 ? "Tidal Cove" : "Sunset Beach";
 
-    // Mountain Wind Gusts (Z = 44 to 108)
+    if (pz >= 150 && state.questStep === 5) {
+      updateQuestUI(6);
+    }
+
+    // Mountain Wind & Falling Meteors (Z = 44 to 108)
     if (pz >= 44 && pz <= 108) {
       state.windTimer += dt;
+      state.meteorTimer += dt;
       if (state.windTimer > 7) {
         state.windForceX = Math.sin(elapsed) > 0 ? 3.2 : -3.2;
-        showAlert("💨 Strong Mountain Wind Gust!", 2200);
+        showAlert("💨 Mountain Wind Gust!", 2000);
         state.windTimer = 0;
-      } else if (state.windTimer > 2.5) {
+      } else if (state.windTimer > 2.4) {
         state.windForceX = 0;
+      }
+      if (state.meteorTimer > 3.6) {
+        state.meteorTimer = 0;
+        spawnMeteorNearPlayer();
       }
     } else {
       state.windForceX = 0;
     }
 
-    const supportY = getSupportHeight(player.position.x, player.position.z, player.position.y);
-    const inWater = supportY < SEA_LEVEL - 0.35 && player.position.y <= SEA_LEVEL - 0.1;
+    const supportY = getSupportHeight(eric.position.x, eric.position.z, eric.position.y);
+    const inWater = supportY < SEA_LEVEL - 0.35 && eric.position.y <= SEA_LEVEL - 0.1;
     if (inWater && !state.isSwimming) AudioEngine.splash();
     state.isSwimming = inWater;
 
     if (!inWater && state.grounded) {
-      state.lastSafePos = { x: player.position.x, y: player.position.y, z: player.position.z };
+      state.lastSafePos = { x: eric.position.x, y: eric.position.y, z: eric.position.z };
     }
 
     let fwd = 0, side = 0;
@@ -1063,12 +1092,11 @@ function animate() {
     const wantsSprint = state.keys["shift"] && state.stamina > 5 && !inWater;
     const isMovingInput = fwd !== 0 || side !== 0;
 
-    // Stamina Management
     if (inWater) {
       state.stamina = Math.max(0, state.stamina - dt * (isMovingInput ? 12 : 6));
       if (state.stamina <= 0) {
-        showAlert("Exhausted by the current! Swept back to shore.", 2600);
-        player.position.set(state.lastSafePos.x, state.lastSafePos.y + 0.3, state.lastSafePos.z);
+        showAlert("Exhausted by the tide! Swept back to shore.", 2500);
+        eric.position.set(state.lastSafePos.x, state.lastSafePos.y + 0.3, state.lastSafePos.z);
         state.stamina = 45;
       }
     } else if (wantsSprint && isMovingInput) {
@@ -1084,11 +1112,7 @@ function animate() {
 
     let moveX = state.windForceX * dt;
     let moveZ = 0;
-
-    // River Current pushes +X in the river gorge
-    if (inWater && pz >= 18 && pz <= 39) {
-      moveX += 2.1 * dt;
-    }
+    if (inWater && pz >= 18 && pz <= 39) moveX += 2.2 * dt; // River current
 
     if (isMovingInput) {
       const len = Math.hypot(fwd, side);
@@ -1098,30 +1122,27 @@ function animate() {
       const dirX = -sinY * fwd + cosY * side;
       const dirZ = -cosY * fwd - sinY * side;
       const speed = inWater ? 4.4 : wantsSprint ? 9.4 : 6.0;
-
       moveX += dirX * speed * dt;
       moveZ += dirZ * speed * dt;
-      player.rotation.y = Math.atan2(dirX, dirZ);
+      eric.rotation.y = Math.atan2(dirX, dirZ);
       playerMoving = true;
     }
 
-    const nx = player.position.x + moveX;
-    const nz = player.position.z + moveZ;
-    if (canMoveTo(nx, player.position.z, player.position.y)) player.position.x = nx;
-    if (canMoveTo(player.position.x, nz, player.position.y)) player.position.z = nz;
+    const nx = eric.position.x + moveX;
+    const nz = eric.position.z + moveZ;
+    if (canMoveTo(nx, eric.position.z, eric.position.y)) eric.position.x = nx;
+    if (canMoveTo(eric.position.x, nz, eric.position.y)) eric.position.z = nz;
 
-    // Vertical Physics (Gravity / Floating in Water)
-    const floorY = getSupportHeight(player.position.x, player.position.z, player.position.y);
+    const floorY = getSupportHeight(eric.position.x, eric.position.z, eric.position.y);
     if (state.isSwimming) {
-      const targetSwimY = SEA_LEVEL - 0.85 + Math.sin(elapsed * 3) * 0.06;
-      player.position.y += (targetSwimY - player.position.y) * dt * 8;
+      eric.position.y += (SEA_LEVEL - 0.85 + Math.sin(elapsed * 3) * 0.06 - eric.position.y) * dt * 8;
       state.velY = 0;
       state.grounded = false;
     } else {
       state.velY -= 24 * dt;
-      player.position.y += state.velY * dt;
-      if (player.position.y <= floorY) {
-        player.position.y = floorY;
+      eric.position.y += state.velY * dt;
+      if (eric.position.y <= floorY) {
+        eric.position.y = floorY;
         state.velY = 0;
         state.grounded = true;
       } else {
@@ -1129,7 +1150,6 @@ function animate() {
       }
     }
 
-    // Interactables & Compass
     state.nearbyInteractable = findNearbyInteractable();
     const promptBtn = document.getElementById("interactPrompt");
     if (state.nearbyInteractable) {
@@ -1144,9 +1164,9 @@ function animate() {
       const oy = getTerrainHeight(obj.x, obj.z);
       beacon.visible = true;
       beacon.position.set(obj.x, oy + 11, obj.z);
-      const dist = Math.round(Math.hypot(obj.x - player.position.x, obj.z - player.position.z));
+      const dist = Math.round(Math.hypot(obj.x - eric.position.x, obj.z - eric.position.z));
       document.getElementById("compassDist").textContent = `${dist}m to objective`;
-      const ang = Math.atan2(obj.x - player.position.x, obj.z - player.position.z);
+      const ang = Math.atan2(obj.x - eric.position.x, obj.z - eric.position.z);
       document.getElementById("compassArrow").style.transform = `rotate(${-((ang - state.camYaw) * 180) / Math.PI - 90}deg)`;
     } else {
       beacon.visible = false;
@@ -1156,33 +1176,29 @@ function animate() {
     document.getElementById("interactPrompt").hidden = true;
   }
 
-  animateCharacterPose(player, playerMoving, state.isSwimming, dt);
+  animateCharacterPose(eric, playerMoving, state.isSwimming, dt);
+  sunLight.position.set(eric.position.x + 20, eric.position.y + 34, eric.position.z + 24);
 
-  // Dynamic Sun Shadow Follows Player Across the 200-Unit World
-  sunLight.position.set(player.position.x + 20, player.position.y + 34, player.position.z + 24);
-
-  // Camera Tracking
-  if (state.phase === "FLASH" || state.phase === "QUARREL" || state.phase === "LADY_LEAVING") {
+  if (state.phase === "FLASH" || state.phase === "QUARREL" || state.phase === "JANE_LEAVING") {
     camera.position.lerp(new THREE.Vector3(0, 3.8, 3.2), 0.06);
     camera.lookAt(0, 1.5, -4);
   } else if (state.phase === "ENDING") {
-    // Cinematic Orbit Looking Toward Couple & Sunset Ocean
     const orbitX = Math.sin(elapsed * 0.18) * 5.2;
-    camera.position.lerp(new THREE.Vector3(orbitX, player.position.y + 2.6, 152.5), 0.04);
-    camera.lookAt(0.6, player.position.y + 1.4, 175);
+    camera.position.lerp(new THREE.Vector3(orbitX, eric.position.y + 2.6, 152.5), 0.04);
+    camera.lookAt(0.6, eric.position.y + 1.4, 175);
   } else {
     const camDist = 8.8;
-    const tx = player.position.x + Math.sin(state.camYaw) * Math.cos(state.camPitch) * camDist;
-    const ty = player.position.y + 2.2 + Math.sin(state.camPitch) * camDist;
-    const tz = player.position.z + Math.cos(state.camYaw) * Math.cos(state.camPitch) * camDist;
+    const tx = eric.position.x + Math.sin(state.camYaw) * Math.cos(state.camPitch) * camDist;
+    const ty = eric.position.y + 2.2 + Math.sin(state.camPitch) * camDist;
+    const tz = eric.position.z + Math.cos(state.camYaw) * Math.cos(state.camPitch) * camDist;
     camera.position.lerp(new THREE.Vector3(tx, ty, tz), 0.12);
-    camera.lookAt(player.position.x, player.position.y + 1.5, player.position.z);
+    camera.lookAt(eric.position.x, eric.position.y + 1.5, eric.position.z);
   }
 
   renderer.render(scene, camera);
 }
 
-/* 15. Safe Startup */
+/* 17. Safe Startup */
 function startGame() {
   try {
     setWorldGrayscale(0);
@@ -1190,7 +1206,7 @@ function startGame() {
     setTimeout(() => {
       document.getElementById("titleFlash").hidden = true;
       beginOpeningQuarrel();
-    }, 3800);
+    }, 4000);
   } catch (err) {
     document.getElementById("titleFlash").hidden = true;
     alert("Startup error: " + err.message);
