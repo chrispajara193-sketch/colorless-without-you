@@ -1,9 +1,8 @@
 /* =========================================================
-   FINDING JANE — Chibi Anime Diorama Edition
-   Atmospheric Little-Nightmares-style miniature lighting (No Horror)
+   FINDING JANE — Living Chibi Diorama Edition
+   Bustling Town + Instanced Grass + Water Physics + Forested Mountains + Sunset Beach
 ========================================================= */
 
-const NOTES_KEY = "finding_jane_sorry_notes_v1";
 const SEA_LEVEL = -0.25;
 
 /* 1. Audio Synthesizer */
@@ -41,7 +40,7 @@ const AudioEngine = (() => {
     toggleMute() { muted = !muted; return muted; },
     blip: () => playTone(560, 0.07, "triangle", 0.04),
     jump: () => playTone(340, 0.12, "sine", 0.05),
-    splash: () => playTone(165, 0.18, "triangle", 0.05),
+    splash: () => { playTone(185, 0.16, "triangle", 0.06); playTone(125, 0.2, "sine", 0.05, 0.05); },
     hit: () => { playTone(130, 0.18, "sawtooth", 0.07); playTone(85, 0.22, "sawtooth", 0.06, 0.06); },
     colorDrain: () => [440, 392, 330, 247].forEach((f, i) => playTone(f, 0.45, "sine", 0.06, i * 0.22)),
     sparkle: () => [523, 659, 880].forEach((f, i) => playTone(f, 0.28, "triangle", 0.06, i * 0.09)),
@@ -66,6 +65,7 @@ const state = {
   velY: 0,
   grounded: true,
   isSwimming: false,
+  rippleTimer: 0,
   lastSafePos: { x: 0, y: 0, z: 14 },
   windForceX: 0,
   windTimer: 0,
@@ -81,8 +81,8 @@ const state = {
 
 const QUEST_INFO = {
   0: { title: "The Separation", desc: "Listen to Jane..." },
-  1: { title: "Follow Jane's Footsteps", desc: "Speak to Sora at the cozy lantern stall in the plaza." },
-  2: { title: "Cross the Rushing River", desc: "Jump rocks or swim the river current to recover Jane's Red Scarf." },
+  1: { title: "Follow Jane's Footsteps", desc: "Speak to Sora at her flower stall in Lantern Town." },
+  2: { title: "Cross the Rushing River", desc: "Swim or hop the river rocks to recover Jane's Red Scarf." },
   3: { title: "Find the Sky Key", desc: "Climb the East Mountain Cliff & dodge falling meteors for the Sky Key." },
   4: { title: "Unlock the Summit Gate", desc: "Bring the Sky Key to the Summit Gate & claim Jane's Locket." },
   5: { title: "Swim the Tidal Cove", desc: "Swim across the ocean sandbars to reach Sunset Beach." },
@@ -90,7 +90,7 @@ const QUEST_INFO = {
   7: { title: "Color Returned", desc: "Eric & Jane watching the sunset together." }
 };
 
-/* 3. Three.js Renderer with Diorama Tone Mapping & Atmospheric Fog */
+/* 3. Three.js Renderer, Tone Mapping & Fog */
 const canvas = document.getElementById("worldCanvas");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -101,13 +101,11 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x2a1f36, 0.0145); // Deep cozy twilight diorama mist
+scene.fog = new THREE.FogExp2(0x2a1f36, 0.013);
 
-// Narrower 42-deg FOV gives the iconic miniature diorama / Little Nightmares scale!
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 360);
 
-// Moody Cozy Lighting (Soft twilight ambient + warm amber pools)
-const hemiLight = new THREE.HemisphereLight(0xa78bfa, 0x1c1917, 0.62);
+const hemiLight = new THREE.HemisphereLight(0xa78bfa, 0x1c1917, 0.65);
 scene.add(hemiLight);
 
 const sunLight = new THREE.DirectionalLight(0xffb36b, 1.35);
@@ -125,18 +123,16 @@ sunLight.shadow.bias = -0.0005;
 scene.add(sunLight);
 scene.add(sunLight.target);
 
-// Dynamic warm lantern light that gently illuminates around Eric in dark areas
-const heroWarmLight = new THREE.PointLight(0xfbbf24, 0.75, 11);
+const heroWarmLight = new THREE.PointLight(0xfbbf24, 0.72, 11);
 scene.add(heroWarmLight);
 
-/* 4. Procedural Canvas Textures (Tiles, Wood Planks, Cozy Roughness) */
+/* 4. Procedural Textures */
 function makeTileTexture() {
   const c = document.createElement("canvas");
   c.width = 256; c.height = 256;
   const cx = c.getContext("2d");
   cx.fillStyle = "#57483d";
   cx.fillRect(0, 0, 256, 256);
-
   const colors = ["#c2956e", "#b0825c", "#a37451", "#c99f77"];
   const step = 64;
   for (let y = 0; y < 256; y += step) {
@@ -179,7 +175,7 @@ function cozyMat(color, roughness = 0.82, extra = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, ...extra });
 }
 
-/* 5. Sunset Diorama Sky Dome & Ocean Sun */
+/* 5. Sunset Sky Dome & Ocean Sun */
 const skyMat = new THREE.ShaderMaterial({
   side: THREE.BackSide,
   depthWrite: false,
@@ -227,7 +223,7 @@ sunHalo.position.set(0, 20, 246);
 sunHalo.rotation.y = Math.PI;
 scene.add(sunHalo);
 
-/* 6. Multi-Biome Terrain */
+/* 6. Multi-Biome Terrain & Water Surface Math */
 function mountainTrailX(z) {
   if (z < 42 || z > 110) return 0;
   return Math.sin(((z - 42) / 68) * Math.PI * 2) * 10.5;
@@ -238,7 +234,7 @@ function getTerrainHeight(x, z) {
 
   if (z < 18) {
     h = 0;
-    const edge = Math.max(0, Math.abs(x) - 18);
+    const edge = Math.max(0, Math.abs(x) - 24);
     h += Math.pow(edge, 1.35) * 0.32;
   }
   if (z >= 17 && z <= 39) {
@@ -274,7 +270,11 @@ function getTerrainHeight(x, z) {
   return h;
 }
 
-const terrainGeo = new THREE.PlaneGeometry(96, 220, 96, 180);
+function getWaterHeight(x, z, time) {
+  return SEA_LEVEL + Math.sin(time * 2.4 + x * 0.28 + z * 0.22) * 0.11 + Math.cos(time * 1.7 - z * 0.2) * 0.06;
+}
+
+const terrainGeo = new THREE.PlaneGeometry(108, 220, 100, 180);
 terrainGeo.rotateX(-Math.PI / 2);
 terrainGeo.translate(0, 0, 75);
 
@@ -309,7 +309,7 @@ const terrainMesh = new THREE.Mesh(terrainGeo, cozyMat(0xffffff, 0.92, { vertexC
 terrainMesh.receiveShadow = true;
 scene.add(terrainMesh);
 
-// Kitchen-Tile Cozy Town Square Disc (Little Nightmares diorama texture!)
+// Tiled Town Plaza
 const tiledPlaza = new THREE.Mesh(
   new THREE.CylinderGeometry(8.5, 8.6, 0.08, 36),
   cozyMat(0xffffff, 0.78, { map: tileTex })
@@ -318,36 +318,98 @@ tiledPlaza.position.set(0, 0.03, -4);
 tiledPlaza.receiveShadow = true;
 scene.add(tiledPlaza);
 
-// Water Mesh
-const waterGeo = new THREE.PlaneGeometry(140, 220, 36, 56);
+// Cobblestone Main Street Path
+const mainRoad = new THREE.Mesh(
+  new THREE.BoxGeometry(4.4, 0.06, 20),
+  cozyMat(0xd6c0a1, 0.85, { map: tileTex })
+);
+mainRoad.position.set(0, 0.02, 7.5);
+mainRoad.receiveShadow = true;
+scene.add(mainRoad);
+
+// Animated Water Plane
+const waterGeo = new THREE.PlaneGeometry(140, 220, 42, 64);
 waterGeo.rotateX(-Math.PI / 2);
 waterGeo.translate(0, SEA_LEVEL, 105);
-const waterBaseY = new Float32Array(waterGeo.attributes.position.count).fill(SEA_LEVEL);
 const waterMesh = new THREE.Mesh(
   waterGeo,
   new THREE.MeshStandardMaterial({
     color: 0x0e7490,
-    roughness: 0.18,
-    metalness: 0.25,
+    roughness: 0.14,
+    metalness: 0.28,
     transparent: true,
-    opacity: 0.85
+    opacity: 0.86
   })
 );
 waterMesh.receiveShadow = true;
 scene.add(waterMesh);
 
-/* 7. Oversized Diorama Props, Volumetric Lamps & Atmospheric Dust */
+/* 7. Water Physics Effects (Ripples, Splashes, River Foam, Shoreline Surge) */
+const waterRipples = [];
+const waterSplashes = [];
+const riverFoamStreaks = [];
+
+function spawnRipple(x, z, maxScale = 2.6) {
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.32, 0.44, 20),
+    new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.72, side: THREE.DoubleSide })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, SEA_LEVEL + 0.14, z);
+  scene.add(ring);
+  waterRipples.push({ mesh: ring, life: 0, maxLife: 0.85, maxScale });
+}
+
+function spawnSplash(x, z, count = 10) {
+  for (let i = 0; i < count; i++) {
+    const drop = new THREE.Mesh(
+      new THREE.SphereGeometry(0.09, 6, 6),
+      new THREE.MeshBasicMaterial({ color: 0xe0f2fe, transparent: true, opacity: 0.9 })
+    );
+    drop.position.set(x + (Math.random() - 0.5) * 0.5, SEA_LEVEL + 0.2, z + (Math.random() - 0.5) * 0.5);
+    scene.add(drop);
+    waterSplashes.push({
+      mesh: drop,
+      vx: (Math.random() - 0.5) * 3.5,
+      vy: 2.8 + Math.random() * 2.5,
+      vz: (Math.random() - 0.5) * 3.5,
+      life: 0.55
+    });
+  }
+}
+
+// River Rapid Foam Streaks (visualizes +X current!)
+for (let i = 0; i < 24; i++) {
+  const streak = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6 + Math.random() * 1.4, 0.04, 0.18),
+    new THREE.MeshBasicMaterial({ color: 0xbae6fd, transparent: true, opacity: 0.55 })
+  );
+  streak.position.set((Math.random() - 0.5) * 36, SEA_LEVEL + 0.13, 20 + Math.random() * 16);
+  scene.add(streak);
+  riverFoamStreaks.push({ mesh: streak, speed: 2.2 + Math.random() * 1.4 });
+}
+
+// Shoreline Foam Strip at Sunset Beach (Z = 164.5)
+const shoreFoam = new THREE.Mesh(
+  new THREE.PlaneGeometry(76, 1.8),
+  new THREE.MeshBasicMaterial({ color: 0xfef3c7, transparent: true, opacity: 0.45, side: THREE.DoubleSide })
+);
+shoreFoam.rotation.x = -Math.PI / 2;
+shoreFoam.position.set(0, SEA_LEVEL + 0.12, 164.5);
+scene.add(shoreFoam);
+
+/* 8. Dense Town, Mountain Forest, Instanced Grass & Sunset Beach Props */
 const colliders = [];
 const platforms = [];
 const boxPlatforms = [];
 const activeMeteors = [];
+const chimneySmokes = [];
+const palmTops = [];
+const bonfireSparks = [];
 let petalSystem = null;
 
 function addPlatformRock(x, z, y, r = 1.7) {
-  const rock = new THREE.Mesh(
-    new THREE.CylinderGeometry(r * 0.92, r * 1.1, 1.4, 8),
-    cozyMat(0x64748b, 0.9)
-  );
+  const rock = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 1.1, 1.4, 8), cozyMat(0x64748b, 0.9));
   rock.position.set(x, y - 0.7, z);
   rock.castShadow = true;
   rock.receiveShadow = true;
@@ -355,116 +417,167 @@ function addPlatformRock(x, z, y, r = 1.7) {
   platforms.push({ x, z, y, r });
 }
 
-function createDioramaCottage(x, z, wallColor, roofColor, rotY = 0) {
+function createDioramaCottage(x, z, wallColor, roofColor, rotY = 0, w = 5.8, h = 4.4, d = 4.8) {
   const g = new THREE.Group();
-  // Oversized cozy diorama cottage!
-  const base = new THREE.Mesh(new THREE.BoxGeometry(6.2, 4.6, 5.2), cozyMat(wallColor, 0.85, { map: woodTex }));
-  base.position.y = 2.3;
+  const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cozyMat(wallColor, 0.85, { map: woodTex }));
+  base.position.y = h / 2;
   base.castShadow = true;
   base.receiveShadow = true;
-  const roof = new THREE.Mesh(new THREE.ConeGeometry(5.1, 3.0, 4), cozyMat(roofColor, 0.88));
-  roof.position.y = 6.0;
+
+  const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.82, 2.8, 4), cozyMat(roofColor, 0.88));
+  roof.position.y = h + 1.4;
   roof.rotation.y = Math.PI / 4;
   roof.castShadow = true;
 
-  // Warm glowing window pane
-  const win = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.5), new THREE.MeshBasicMaterial({ color: 0xfde68a }));
-  win.position.set(0, 2.4, 2.62);
-  g.add(base, roof, win);
+  // Chimney
+  const chim = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.7), cozyMat(0x57534e, 0.9));
+  chim.position.set(w * 0.25, h + 1.6, -d * 0.15);
+  chim.castShadow = true;
 
+  // Glowing Cozy Windows + Door
+  const win1 = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.2), new THREE.MeshBasicMaterial({ color: 0xfde68a }));
+  win1.position.set(-w * 0.22, h * 0.52, d / 2 + 0.02);
+  const win2 = win1.clone();
+  win2.position.set(w * 0.22, h * 0.52, d / 2 + 0.02);
+  const door = new THREE.Mesh(new THREE.BoxGeometry(1.1, 1.9, 0.12), cozyMat(0x451a03, 0.9));
+  door.position.set(0, 0.95, d / 2 + 0.03);
+
+  g.add(base, roof, chim, win1, win2, door);
   g.position.set(x, getTerrainHeight(x, z), z);
   g.rotation.y = rotY;
   scene.add(g);
-  colliders.push({ x, z, r: 3.6 });
+  colliders.push({ x, z, r: Math.max(w, d) * 0.58 });
+
+  // Chimney smoke puff
+  const smoke = new THREE.Mesh(
+    new THREE.SphereGeometry(0.32, 6, 6),
+    new THREE.MeshBasicMaterial({ color: 0xe7e5e4, transparent: true, opacity: 0.45 })
+  );
+  const worldChimX = x + Math.cos(rotY) * (w * 0.25);
+  const worldChimZ = z - Math.sin(rotY) * (w * 0.25);
+  smoke.position.set(worldChimX, h + 2.7, worldChimZ);
+  scene.add(smoke);
+  chimneySmokes.push({ mesh: smoke, baseY: h + 2.7, offset: Math.random() * 10 });
 }
 
-function createStylizedTree(x, z, type = "sakura") {
+function createStylizedTree(x, z, type = "sakura", scale = 1) {
   const g = new THREE.Group();
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.55, 3.6, 8), cozyMat(0x4a2c18, 0.92));
-  trunk.position.y = 1.8;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.5, 3.4, 8), cozyMat(0x4a2c18, 0.92));
+  trunk.position.y = 1.7;
   trunk.castShadow = true;
-  const c1 = type === "sakura" ? 0xf472b6 : 0x2d5a43;
-  const c2 = type === "sakura" ? 0xf9a8d4 : 0x3b7355;
-  const canopy1 = new THREE.Mesh(new THREE.DodecahedronGeometry(2.3, 1), cozyMat(c1, 0.85));
-  canopy1.position.y = 4.2;
-  canopy1.castShadow = true;
-  const canopy2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.5, 1), cozyMat(c2, 0.85));
-  canopy2.position.set(1.0, 3.5, 0.5);
-  canopy2.castShadow = true;
-  g.add(trunk, canopy1, canopy2);
+
+  if (type === "pine") {
+    const c1 = new THREE.Mesh(new THREE.ConeGeometry(2.1, 3.2, 7), cozyMat(0x2d5a43, 0.88));
+    c1.position.y = 3.6; c1.castShadow = true;
+    const c2 = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.6, 7), cozyMat(0x3b7355, 0.88));
+    c2.position.y = 5.1; c2.castShadow = true;
+    g.add(trunk, c1, c2);
+  } else {
+    const c1 = new THREE.Mesh(new THREE.DodecahedronGeometry(2.2, 1), cozyMat(0xf472b6, 0.85));
+    c1.position.y = 4.0; c1.castShadow = true;
+    const c2 = new THREE.Mesh(new THREE.DodecahedronGeometry(1.4, 1), cozyMat(0xf9a8d4, 0.85));
+    c2.position.set(1.0, 3.4, 0.5); c2.castShadow = true;
+    g.add(trunk, c1, c2);
+  }
+
+  g.scale.setScalar(scale);
   g.position.set(x, getTerrainHeight(x, z), z);
   scene.add(g);
-  colliders.push({ x, z, r: 1.05 });
+  colliders.push({ x, z, r: 0.95 * scale });
 }
 
 function createLanternPost(x, z, withPointLight = false) {
   const y = getTerrainHeight(x, z);
   const g = new THREE.Group();
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.16, 4.6), cozyMat(0x27272a, 0.7));
-  pole.position.y = 2.3;
-  pole.castShadow = true;
-
+  pole.position.y = 2.3; pole.castShadow = true;
   const cap = new THREE.Mesh(new THREE.ConeGeometry(0.5, 0.4, 6), cozyMat(0x18181b));
   cap.position.y = 4.75;
-
   const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 12), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
   bulb.position.y = 4.4;
-
-  // Volumetric Warm Light Cone (Little Nightmares style hazy beam!)
   const beam = new THREE.Mesh(
     new THREE.ConeGeometry(2.8, 4.5, 18, 1, true),
-    new THREE.MeshBasicMaterial({
-      color: 0xfde68a,
-      transparent: true,
-      opacity: 0.11,
-      side: THREE.DoubleSide,
-      depthWrite: false
-    })
+    new THREE.MeshBasicMaterial({ color: 0xfde68a, transparent: true, opacity: 0.11, side: THREE.DoubleSide, depthWrite: false })
   );
   beam.position.y = 2.25;
   g.add(pole, cap, bulb, beam);
-
   if (withPointLight) {
-    const pt = new THREE.PointLight(0xffb74d, 1.5, 16);
+    const pt = new THREE.PointLight(0xffb74d, 1.4, 16);
     pt.position.y = 4.2;
     g.add(pt);
   }
-
   g.position.set(x, y, z);
   scene.add(g);
 }
 
-// Cozy Oversized Crates & Props around Town
-function createWoodenCrate(x, z, size = 1.2) {
-  const box = new THREE.Mesh(new THREE.BoxGeometry(size, size, size), cozyMat(0xa16207, 0.85, { map: woodTex }));
-  box.position.set(x, getTerrainHeight(x, z) + size / 2, z);
-  box.rotation.y = Math.random() * 0.6;
-  box.castShadow = true;
-  box.receiveShadow = true;
-  scene.add(box);
-  colliders.push({ x, z, r: size * 0.7 });
+function createBench(x, z, rotY = 0) {
+  const g = new THREE.Group();
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.18, 0.75), cozyMat(0x92400e, 0.85, { map: woodTex }));
+  seat.position.y = 0.55; seat.castShadow = true;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.65, 0.15), cozyMat(0x78350f, 0.85, { map: woodTex }));
+  back.position.set(0, 0.95, -0.32); back.castShadow = true;
+  g.add(seat, back);
+  g.position.set(x, getTerrainHeight(x, z), z);
+  g.rotation.y = rotY;
+  scene.add(g);
+  colliders.push({ x, z, r: 1.1 });
 }
 
-createDioramaCottage(-15, -10, 0xd6b89c, 0x9f1239, 0.45);
-createDioramaCottage(15, -10, 0xcbd5e1, 0x3730a3, -0.45);
-createDioramaCottage(-15, 4, 0xe7d4c0, 0xbe123c, 1.15);
-createWoodenCrate(-6.2, -7.2, 1.25);
-createWoodenCrate(-5.0, -7.8, 0.85);
-createWoodenCrate(6.4, -7.2, 1.1);
+function createPalmTree(x, z) {
+  const g = new THREE.Group();
+  const y = getTerrainHeight(x, z);
+  for (let i = 0; i < 5; i++) {
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(0.2 - i * 0.02, 0.25 - i * 0.02, 1.1, 7), cozyMat(0x78350f, 0.9));
+    seg.position.set(Math.sin(i * 0.25) * 0.35, 0.55 + i * 0.95, 0);
+    seg.rotation.z = -0.08 * i;
+    seg.castShadow = true;
+    g.add(seg);
+  }
+  const crown = new THREE.Group();
+  crown.position.set(0.35, 5.1, 0);
+  for (let a = 0; a < 6; a++) {
+    const leaf = new THREE.Mesh(new THREE.ConeGeometry(0.55, 2.8, 5), cozyMat(0x2e7d32, 0.85));
+    leaf.rotation.z = Math.PI / 2.6;
+    leaf.rotation.y = (a / 6) * Math.PI * 2;
+    leaf.position.set(Math.cos((a / 6) * Math.PI * 2) * 1.1, -0.2, Math.sin((a / 6) * Math.PI * 2) * 1.1);
+    leaf.castShadow = true;
+    crown.add(leaf);
+  }
+  g.add(crown);
+  palmTops.push(crown);
+  g.position.set(x, y, z);
+  scene.add(g);
+  colliders.push({ x, z, r: 0.7 });
+}
+
+// FULL DIORAMA TOWN (10 Houses & Shops + Benches + Crates + Lamps)
+createDioramaCottage(-15, -13, 0xd6b89c, 0x9f1239, 0.45);
+createDioramaCottage(15, -13, 0xcbd5e1, 0x3730a3, -0.45);
+createDioramaCottage(-16, -2, 0xe7d4c0, 0xbe123c, 1.25, 5.2, 4.0, 4.4);
+createDioramaCottage(16, -2, 0xfef3c7, 0x0f766e, -1.25, 5.4, 4.2, 4.4);
+createDioramaCottage(-14, 9, 0xfce7f3, 0xb45309, 0.85, 5.0, 3.8, 4.2);
+createDioramaCottage(14, 9, 0xe0f2fe, 0x4338ca, -0.85, 5.0, 3.8, 4.2);
+createDioramaCottage(-6, -18, 0xe2e8f0, 0x881337, 0.1, 5.4, 4.2, 4.2);
+createDioramaCottage(7, -18, 0xfde68a, 0x1e40af, -0.1, 5.2, 4.0, 4.2);
+createDioramaCottage(-22, -7, 0xd6b89c, 0x7c2d12, 1.4);
+createDioramaCottage(22, -7, 0xe7d4c0, 0x312e81, -1.4);
+
+createBench(-6.2, -10, 0.6);
+createBench(6.2, -10, -0.6);
+createBench(-5.5, 4, Math.PI / 2);
+createBench(5.5, 4, -Math.PI / 2);
 
 createLanternPost(-6.5, -1, true);
 createLanternPost(6.5, -1, false);
-createLanternPost(-2.6, 16.5, false);
-createLanternPost(2.6, 16.5, false);
+createLanternPost(-2.8, 16.2, false);
+createLanternPost(2.8, 16.2, false);
 
-// Sora's Cozy Flower Stall
+// Sora's Flower Stall
 const stall = new THREE.Group();
 const counter = new THREE.Mesh(new THREE.BoxGeometry(3.8, 1.4, 1.6), cozyMat(0xb45309, 0.85, { map: woodTex }));
-counter.position.y = 0.7;
-counter.castShadow = true;
+counter.position.y = 0.7; counter.castShadow = true;
 const awning = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.28, 2.4), cozyMat(0xe11d48, 0.8));
-awning.position.set(0, 3.2, 0.1);
-awning.rotation.x = 0.2;
+awning.position.set(0, 3.2, 0.1); awning.rotation.x = 0.2;
 stall.add(counter, awning);
 stall.position.set(-9.5, 0, -4.5);
 stall.rotation.y = Math.PI / 3;
@@ -472,7 +585,19 @@ scene.add(stall);
 colliders.push({ x: -9.5, z: -4.5, r: 2.1 });
 createLanternPost(-7.5, -5.5, true);
 
-// Broken Bridge Piers
+// Second Bakery Stall on East Plaza
+const bakery = new THREE.Group();
+const bCounter = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.3, 1.5), cozyMat(0x92400e, 0.85, { map: woodTex }));
+bCounter.position.y = 0.65; bCounter.castShadow = true;
+const bAwning = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.26, 2.2), cozyMat(0x0284c7, 0.8));
+bAwning.position.set(0, 3.0, 0.1); bAwning.rotation.x = 0.2;
+bakery.add(bCounter, bAwning);
+bakery.position.set(9.5, 0, -4.5);
+bakery.rotation.y = -Math.PI / 3;
+scene.add(bakery);
+colliders.push({ x: 9.5, z: -4.5, r: 2.0 });
+
+// Broken Bridge Piers (Walkable planks!)
 [18, 38].forEach((bz) => {
   const pier = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.6, 2.4), cozyMat(0x78350f, 0.9, { map: woodTex }));
   pier.position.set(0, 0.2, bz);
@@ -493,7 +618,7 @@ addPlatformRock(-1.2, 34.5, 0.1, 1.5);
 const keyCliffY = getTerrainHeight(10.5, 59) + 0.8;
 addPlatformRock(14.2, 59, keyCliffY, 2.5);
 
-// Summit Torii Gate & Barrier (Z = 75)
+// Summit Torii Gate & Barrier
 const summitY = getTerrainHeight(0, 76);
 const gateGroup = new THREE.Group();
 const toriiL = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.28, 4.8), cozyMat(0xbe123c, 0.8, { map: woodTex }));
@@ -515,24 +640,114 @@ const summitLight = new THREE.PointLight(0xfbbf24, 1.4, 18);
 summitLight.position.set(0, summitY + 4, 76);
 scene.add(summitLight);
 
-// Beach Lantern beside Jane
-const beachLight = new THREE.PointLight(0xfb923c, 1.6, 18);
-beachLight.position.set(-2.2, getTerrainHeight(-2.2, 158) + 1.5, 158);
-scene.add(beachLight);
-const beachLantern = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.22, 0.26, 0.55, 8),
-  new THREE.MeshBasicMaterial({ color: 0xfef08a })
+// DENSE MOUNTAIN FOREST (38 Alpine Pine & Sakura Trees framing the climb!)
+for (let i = 0; i < 38; i++) {
+  const mz = 43 + (i / 38) * 65;
+  const side = i % 2 === 0 ? 1 : -1;
+  const mx = mountainTrailX(mz) + side * (5.2 + (i % 5) * 3.1);
+  if (Math.hypot(mx - 14.2, mz - 59) < 3.6) continue;
+  if (Math.hypot(mx, mz - 76) < 5.0) continue;
+  if (Math.abs(mx) > 36) continue;
+  createStylizedTree(mx, mz, i % 4 === 0 ? "sakura" : "pine", 0.85 + (i % 3) * 0.22);
+}
+
+// Town Perimeter Trees
+[[-11, -15, "sakura"], [11, -15, "sakura"], [-9, 13, "pine"], [9, 13, "sakura"]].forEach(([x, z, t]) =>
+  createStylizedTree(x, z, t)
 );
-beachLantern.position.set(-2.2, getTerrainHeight(-2.2, 158) + 0.3, 158);
-scene.add(beachLantern);
 
-[
-  [-12, -15, "sakura"], [12, -15, "sakura"], [13, 3, "sakura"],
-  [-9, 10, "pine"], [9, 10, "sakura"], [-12, 46, "pine"], [12, 48, "pine"],
-  [-15, 76, "sakura"], [15, 76, "sakura"], [-11, 102, "pine"], [11, 104, "sakura"]
-].forEach(([x, z, t]) => createStylizedTree(x, z, t));
+// SUNSET BEACH PROPS (Palms, Wooden Pier, Bonfire, Boat, Umbrella & Shells!)
+createPalmTree(-12, 155);
+createPalmTree(13, 156);
+createPalmTree(-17, 159);
+createPalmTree(18, 158);
 
-// Floating Atmospheric Dust Motes (follows world subtly)
+// Walkable Beach Wooden Pier extending over the ocean waves!
+const beachPier = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.35, 9.0), cozyMat(0x78350f, 0.88, { map: woodTex }));
+beachPier.position.set(-8.5, 0.5, 162);
+beachPier.castShadow = true;
+beachPier.receiveShadow = true;
+scene.add(beachPier);
+boxPlatforms.push({ x: -8.5, z: 162, y: 0.68, halfW: 1.6, halfD: 4.5 });
+
+// Beached Wooden Rowboat
+const boat = new THREE.Group();
+const hull = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.65, 4.4), cozyMat(0x92400e, 0.85, { map: woodTex }));
+hull.castShadow = true;
+const seatPlank = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.12, 0.5), cozyMat(0xb45309));
+seatPlank.position.y = 0.25;
+boat.add(hull, seatPlank);
+boat.position.set(9.5, getTerrainHeight(9.5, 159) + 0.25, 159);
+boat.rotation.set(0.08, -0.45, 0.12);
+scene.add(boat);
+colliders.push({ x: 9.5, z: 159, r: 2.0 });
+
+// Beach Umbrella & Lounge Chair
+const umbrellaGroup = new THREE.Group();
+const uPole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.8), cozyMat(0xe2e8f0));
+uPole.position.y = 1.4;
+const uTop = new THREE.Mesh(new THREE.ConeGeometry(2.1, 0.8, 8), cozyMat(0xf43f5e));
+uTop.position.y = 2.7; uTop.castShadow = true;
+umbrellaGroup.add(uPole, uTop);
+umbrellaGroup.position.set(5.5, getTerrainHeight(5.5, 155), 155);
+scene.add(umbrellaGroup);
+
+// Cozy Beach Bonfire + Sparks
+const firePos = { x: -2.8, z: 157.5, y: getTerrainHeight(-2.8, 157.5) };
+for (let i = 0; i < 6; i++) {
+  const stone = new THREE.Mesh(new THREE.DodecahedronGeometry(0.24), cozyMat(0x57534e));
+  stone.position.set(firePos.x + Math.cos((i / 6) * Math.PI * 2) * 0.65, firePos.y + 0.15, firePos.z + Math.sin((i / 6) * Math.PI * 2) * 0.65);
+  scene.add(stone);
+}
+const flame = new THREE.Mesh(new THREE.ConeGeometry(0.38, 0.95, 6), new THREE.MeshBasicMaterial({ color: 0xfb923c }));
+flame.position.set(firePos.x, firePos.y + 0.45, firePos.z);
+scene.add(flame);
+const beachFireLight = new THREE.PointLight(0xfb923c, 1.8, 20);
+beachFireLight.position.set(firePos.x, firePos.y + 1.4, firePos.z);
+scene.add(beachFireLight);
+
+for (let i = 0; i < 14; i++) {
+  const sp = new THREE.Mesh(new THREE.SphereGeometry(0.05, 4, 4), new THREE.MeshBasicMaterial({ color: 0xfde047 }));
+  sp.position.set(firePos.x, firePos.y + 0.5 + Math.random() * 2, firePos.z);
+  scene.add(sp);
+  bonfireSparks.push({ mesh: sp, speed: 0.7 + Math.random() * 0.9, phase: Math.random() * 6 });
+}
+
+// INSTANCED GRASS (1,050 grass blades in 1 draw call!)
+const grassPositions = [];
+for (let i = 0; i < 1400; i++) {
+  const gx = (Math.random() - 0.5) * 76;
+  const gz = -22 + Math.random() * 130;
+  const gy = getTerrainHeight(gx, gz);
+  if (gy < 0.15) continue; // Not in water
+  if (gz < 16 && Math.hypot(gx, gz + 4) < 9.0) continue; // Keep plaza clear
+  if (gz < 18 && Math.abs(gx) < 2.8) continue; // Keep road clear
+  if (gz >= 40 && Math.abs(gx - mountainTrailX(gz)) < 3.8) continue; // Keep mountain trail clear
+  grassPositions.push({ x: gx, y: gy, z: gz });
+}
+
+const grassGeo = new THREE.ConeGeometry(0.14, 0.62, 4);
+grassGeo.translate(0, 0.31, 0);
+const grassMat = cozyMat(0xffffff, 0.9);
+const grassMesh = new THREE.InstancedMesh(grassGeo, grassMat, grassPositions.length);
+grassMesh.receiveShadow = true;
+
+const dummy = new THREE.Object3D();
+const grassShades = [new THREE.Color(0x4d8b5c), new THREE.Color(0x3a7048), new THREE.Color(0x65a36c), new THREE.Color(0x7ca965)];
+grassPositions.forEach((p, idx) => {
+  dummy.position.set(p.x, p.y - 0.04, p.z);
+  dummy.rotation.set((Math.random() - 0.5) * 0.25, Math.random() * Math.PI, (Math.random() - 0.5) * 0.25);
+  const sc = 0.7 + Math.random() * 0.75;
+  dummy.scale.set(sc, sc, sc);
+  dummy.updateMatrix();
+  grassMesh.setMatrixAt(idx, dummy.matrix);
+  grassMesh.setColorAt(idx, grassShades[idx % grassShades.length]);
+});
+grassMesh.instanceMatrix.needsUpdate = true;
+if (grassMesh.instanceColor) grassMesh.instanceColor.needsUpdate = true;
+scene.add(grassMesh);
+
+// Floating Dust Motes
 const dustCount = 160;
 const dustGeo = new THREE.BufferGeometry();
 const dustPos = new Float32Array(dustCount * 3);
@@ -548,84 +763,60 @@ const dustSystem = new THREE.Points(
 );
 scene.add(dustSystem);
 
-/* 8. Chibi Anime Character Builder (Big Head, Cozy Hooded Coat, Anime Eyes) */
+/* 9. Chibi Characters + Lively Townspeople */
 function createChibiCharacter({ coat, hair, skin = 0xffe0c4, scarf = 0xf43f5e }) {
   const g = new THREE.Group();
-
-  // Tiny Chibi Legs + Boots (Pivot at hip)
   const legGeo = new THREE.CylinderGeometry(0.11, 0.13, 0.52, 8);
   legGeo.translate(0, -0.26, 0);
   const bootMat = cozyMat(0x1c1917, 0.8);
 
   const leftLeg = new THREE.Mesh(legGeo, bootMat);
-  leftLeg.position.set(-0.14, 0.52, 0);
-  leftLeg.castShadow = true;
+  leftLeg.position.set(-0.14, 0.52, 0); leftLeg.castShadow = true;
   const rightLeg = new THREE.Mesh(legGeo, bootMat);
-  rightLeg.position.set(0.14, 0.52, 0);
-  rightLeg.castShadow = true;
+  rightLeg.position.set(0.14, 0.52, 0); rightLeg.castShadow = true;
   g.add(leftLeg, rightLeg);
 
-  // Cozy Oversized Hooded Raincoat / Poncho (Flared cone like Six's silhouette!)
-  const coatMesh = new THREE.Mesh(
-    new THREE.ConeGeometry(0.45, 0.85, 14),
-    cozyMat(coat, 0.78)
-  );
-  coatMesh.position.y = 0.82;
-  coatMesh.castShadow = true;
+  const coatMesh = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.85, 14), cozyMat(coat, 0.78));
+  coatMesh.position.y = 0.82; coatMesh.castShadow = true;
   g.add(coatMesh);
 
-  // Cozy Scarf Collar
   const scarfM = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.085, 8, 16), cozyMat(scarf, 0.8));
-  scarfM.rotation.x = Math.PI / 2;
-  scarfM.position.y = 1.18;
+  scarfM.rotation.x = Math.PI / 2; scarfM.position.y = 1.18;
   g.add(scarfM);
 
-  // Chibi Sleeves / Arms
   const armGeo = new THREE.CylinderGeometry(0.09, 0.12, 0.5, 8);
   armGeo.translate(0, -0.22, 0);
   const leftArm = new THREE.Mesh(armGeo, cozyMat(coat, 0.78));
-  leftArm.position.set(-0.34, 1.1, 0);
-  leftArm.rotation.z = 0.2;
+  leftArm.position.set(-0.34, 1.1, 0); leftArm.rotation.z = 0.2;
   const rightArm = new THREE.Mesh(armGeo, cozyMat(coat, 0.78));
-  rightArm.position.set(0.34, 1.1, 0);
-  rightArm.rotation.z = -0.2;
+  rightArm.position.set(0.34, 1.1, 0); rightArm.rotation.z = -0.2;
   g.add(leftArm, rightArm);
 
-  // Oversized Chibi Head!
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.42, 20, 20), cozyMat(skin, 0.7));
-  head.position.y = 1.56;
-  head.castShadow = true;
+  head.position.y = 1.56; head.castShadow = true;
   g.add(head);
 
-  // Cozy Hood Framing the Back of the Head
   const hood = new THREE.Mesh(
     new THREE.SphereGeometry(0.46, 18, 18, 0, Math.PI * 2, 0, Math.PI * 0.65),
     cozyMat(coat, 0.78, { side: THREE.DoubleSide })
   );
-  hood.position.set(0, 1.58, -0.04);
-  hood.rotation.x = -0.55;
-  hood.castShadow = true;
+  hood.position.set(0, 1.58, -0.04); hood.rotation.x = -0.55; hood.castShadow = true;
   g.add(hood);
 
-  // Anime Hair Bangs
   const hairBangs = new THREE.Mesh(
     new THREE.SphereGeometry(0.435, 16, 16, 0, Math.PI * 2, 0, Math.PI * 0.42),
     cozyMat(hair, 0.82)
   );
-  hairBangs.position.set(0, 1.6, 0.03);
-  hairBangs.rotation.x = 0.25;
+  hairBangs.position.set(0, 1.6, 0.03); hairBangs.rotation.x = 0.25;
   g.add(hairBangs);
 
-  // Big Sparkling Anime Eyes + White Catchlights + Rosy Cheeks
   [-0.14, 0.14].forEach((ex) => {
     const iris = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), new THREE.MeshBasicMaterial({ color: 0x1e1b4b }));
-    iris.scale.set(0.85, 1.2, 0.5);
-    iris.position.set(ex, 1.52, 0.39);
+    iris.scale.set(0.85, 1.2, 0.5); iris.position.set(ex, 1.52, 0.39);
     const sparkle = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
     sparkle.position.set(ex + 0.02, 1.55, 0.42);
     const blush = new THREE.Mesh(new THREE.SphereGeometry(0.048, 8, 8), new THREE.MeshBasicMaterial({ color: 0xfda4af }));
-    blush.scale.set(1.3, 0.6, 0.3);
-    blush.position.set(ex * 1.45, 1.43, 0.38);
+    blush.scale.set(1.3, 0.6, 0.3); blush.position.set(ex * 1.45, 1.43, 0.38);
     g.add(iris, sparkle, blush);
   });
 
@@ -665,7 +856,7 @@ function animateCharacterPose(char, isMoving, isSwimming, dt) {
   }
 }
 
-// Chibi Cast
+// Main Story Cast
 const eric = createChibiCharacter({ coat: 0x3b82f6, hair: 0x1c1917, scarf: 0xfbbf24 });
 eric.position.set(-1.3, 0, -4);
 eric.rotation.y = Math.PI / 2;
@@ -674,12 +865,27 @@ const jane = createChibiCharacter({ coat: 0xfb7185, hair: 0x451a03, scarf: 0xf43
 jane.position.set(1.3, 0, -4);
 jane.rotation.y = -Math.PI / 2;
 
-// Sora wears a sunny yellow raincoat as a cute nod to Six!
 const sora = createChibiCharacter({ coat: 0xfacc15, hair: 0x57361a, scarf: 0xe11d48 });
 sora.position.set(-8.0, 0, -3.2);
 sora.rotation.y = Math.PI / 3;
 
-/* 9. Collectibles & Waypoint */
+// Lively Chibi Townspeople (Strolling & Hanging Out!)
+const villagers = [
+  { mesh: createChibiCharacter({ coat: 0x10b981, hair: 0x292524, scarf: 0xfef3c7 }), type: "orbit", cx: 0, cz: -4, r: 6.4, angle: 0.4, speed: 0.35 },
+  { mesh: createChibiCharacter({ coat: 0x8b5cf6, hair: 0x451a03, scarf: 0x38bdf8 }), type: "orbit", cx: 0, cz: -4, r: 6.8, angle: 3.5, speed: -0.3 },
+  { mesh: createChibiCharacter({ coat: 0xea580c, hair: 0x1c1917, scarf: 0xfde047 }), type: "patrol", x1: -8, z1: 11, x2: 8, z2: 11, t: 0.2, dir: 1, speed: 0.16 },
+  { mesh: createChibiCharacter({ coat: 0x14b8a6, hair: 0x78350f, scarf: 0xf472b6 }), type: "patrol", x1: -9, z1: -14, x2: 9, z2: -14, t: 0.7, dir: -1, speed: 0.14 },
+  { mesh: createChibiCharacter({ coat: 0xf97316, hair: 0x451a03, scarf: 0xffffff }), type: "idle", x: 8.2, z: -3.3, rotY: -Math.PI / 3 },
+  { mesh: createChibiCharacter({ coat: 0x6366f1, hair: 0x1c1917, scarf: 0xfb7185 }), type: "idle", x: 6.5, z: -9.0, rotY: -0.5 }
+];
+villagers.forEach((v) => {
+  if (v.type === "idle") {
+    v.mesh.position.set(v.x, getTerrainHeight(v.x, v.z), v.z);
+    v.mesh.rotation.y = v.rotY;
+  }
+});
+
+/* 10. Collectibles, Waypoint & Falling Meteors */
 const scarfItem = new THREE.Mesh(
   new THREE.TorusKnotGeometry(0.32, 0.09, 36, 8),
   new THREE.MeshBasicMaterial({ color: 0xf43f5e })
@@ -711,7 +917,6 @@ const beacon = new THREE.Mesh(
 beacon.visible = false;
 scene.add(beacon);
 
-/* 10. Falling Meteor Hazards */
 function spawnMeteorNearPlayer() {
   const tx = eric.position.x + (Math.random() - 0.5) * 5;
   const tz = eric.position.z + (Math.random() - 0.5) * 6 + 2;
@@ -885,8 +1090,8 @@ function interactWithTarget(target) {
   if (target.id === "sora" && state.questStep === 1) {
     startDialogue(
       [
-        { speaker: "Sora", role: "Lantern Keeper", text: "Eric! Jane hurried north out of Lantern Square crying—the river bridge collapsed, so she crossed the rocks!" },
-        { speaker: "Sora", role: "Lantern Keeper", text: "I saw her red scarf snag out in the river. Watch your stamina in the water, and watch for falling meteors up on Storm Ridge!" }
+        { speaker: "Sora", role: "Lantern Keeper", text: "Eric! Jane hurried north out of town crying—the river bridge collapsed, so she crossed the rocks!" },
+        { speaker: "Sora", role: "Lantern Keeper", text: "I saw her red scarf snag out in the rushing river. Watch your stamina in the water, and watch for falling meteors up on Storm Ridge!" }
       ],
       () => {
         scarfItem.visible = true;
@@ -977,18 +1182,18 @@ function triggerSunsetFinale() {
   );
 }
 
-/* 14. Support Height, Water Climbing & Colliders */
+/* 14. Support Height, Walkable Planks & Colliders */
 function getSupportHeight(x, z, currentY) {
   let y = getTerrainHeight(x, z);
   for (const p of platforms) {
     const onRock = Math.hypot(x - p.x, z - p.z) <= p.r;
-    if (onRock && (currentY >= p.y - 1.45 || (state.isSwimming && p.y <= 0.7))) {
+    if (onRock && (currentY >= p.y - 1.45 || (state.isSwimming && p.y <= 0.75))) {
       y = Math.max(y, p.y);
     }
   }
   for (const b of boxPlatforms) {
     const onBox = Math.abs(x - b.x) <= b.halfW && Math.abs(z - b.z) <= b.halfD;
-    if (onBox && (currentY >= b.y - 1.45 || (state.isSwimming && b.y <= 0.7))) {
+    if (onBox && (currentY >= b.y - 1.45 || (state.isSwimming && b.y <= 0.75))) {
       y = Math.max(y, b.y);
     }
   }
@@ -1042,7 +1247,7 @@ function findNearbyInteractable() {
   return null;
 }
 
-/* 16. Input Listeners */
+/* 15. Input Listeners */
 window.addEventListener("keydown", (e) => {
   AudioEngine.unlock();
   const k = e.key.toLowerCase();
@@ -1128,7 +1333,7 @@ window.addEventListener("resize", () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-/* 17. Main Loop */
+/* 16. Main Loop */
 const clock = new THREE.Clock();
 
 function animate() {
@@ -1136,12 +1341,96 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const elapsed = clock.getElapsedTime();
 
-  // Ocean & River Waves
+  // Animate Water Waves & Shoreline Surge
   const wPos = waterGeo.attributes.position;
   for (let i = 0; i < wPos.count; i++) {
-    wPos.setY(i, waterBaseY[i] + Math.sin(elapsed * 2.2 + wPos.getX(i) * 0.25 + wPos.getZ(i) * 0.2) * 0.09);
+    wPos.setY(i, getWaterHeight(wPos.getX(i), wPos.getZ(i), elapsed));
   }
   wPos.needsUpdate = true;
+
+  shoreFoam.position.z = 164.4 + Math.sin(elapsed * 1.9) * 0.65;
+  shoreFoam.material.opacity = 0.35 + Math.sin(elapsed * 1.9) * 0.14;
+
+  // River Foam Streaks Flowing Downstream (+X)
+  riverFoamStreaks.forEach((s) => {
+    s.mesh.position.x += s.speed * dt;
+    s.mesh.position.y = getWaterHeight(s.mesh.position.x, s.mesh.position.z, elapsed) + 0.04;
+    if (s.mesh.position.x > 22) s.mesh.position.x = -22;
+  });
+
+  // Expanding Water Ripples
+  for (let i = waterRipples.length - 1; i >= 0; i--) {
+    const r = waterRipples[i];
+    r.life += dt;
+    const prog = r.life / r.maxLife;
+    if (prog >= 1) {
+      scene.remove(r.mesh);
+      waterRipples.splice(i, 1);
+    } else {
+      const sc = 1 + prog * r.maxScale;
+      r.mesh.scale.set(sc, sc, 1);
+      r.mesh.material.opacity = 0.72 * (1 - prog);
+    }
+  }
+
+  // Water Splash Droplets
+  for (let i = waterSplashes.length - 1; i >= 0; i--) {
+    const s = waterSplashes[i];
+    s.life -= dt;
+    s.vy -= 12 * dt;
+    s.mesh.position.x += s.vx * dt;
+    s.mesh.position.y += s.vy * dt;
+    s.mesh.position.z += s.vz * dt;
+    if (s.life <= 0) {
+      scene.remove(s.mesh);
+      waterSplashes.splice(i, 1);
+    }
+  }
+
+  // Chimney Smoke, Palm Breeze & Bonfire Sparks
+  chimneySmokes.forEach((cs) => {
+    const cycle = (elapsed * 0.45 + cs.offset) % 1;
+    cs.mesh.position.y = cs.baseY + cycle * 2.6;
+    cs.mesh.scale.setScalar(0.8 + cycle * 1.4);
+    cs.mesh.material.opacity = 0.45 * (1 - cycle);
+  });
+
+  palmTops.forEach((pt, idx) => {
+    pt.rotation.z = Math.sin(elapsed * 1.6 + idx) * 0.06;
+  });
+
+  flame.scale.set(1 + Math.sin(elapsed * 12) * 0.12, 1 + Math.cos(elapsed * 14) * 0.16, 1);
+  beachFireLight.intensity = 1.6 + Math.sin(elapsed * 10) * 0.35;
+  bonfireSparks.forEach((sp) => {
+    sp.mesh.position.y += sp.speed * dt;
+    sp.mesh.position.x = firePos.x + Math.sin(elapsed * 3 + sp.phase) * 0.32;
+    if (sp.mesh.position.y > firePos.y + 3.2) sp.mesh.position.y = firePos.y + 0.4;
+  });
+
+  // Animate Bustling Villagers
+  villagers.forEach((v) => {
+    if (v.type === "orbit") {
+      v.angle += v.speed * dt;
+      const nx = v.cx + Math.cos(v.angle) * v.r;
+      const nz = v.cz + Math.sin(v.angle) * v.r;
+      const dx = nx - v.mesh.position.x;
+      const dz = nz - v.mesh.position.z;
+      v.mesh.position.set(nx, getTerrainHeight(nx, nz), nz);
+      v.mesh.rotation.y = Math.atan2(dx, dz);
+      animateCharacterPose(v.mesh, true, false, dt);
+    } else if (v.type === "patrol") {
+      v.t += v.dir * v.speed * dt;
+      if (v.t >= 1) { v.t = 1; v.dir = -1; }
+      if (v.t <= 0) { v.t = 0; v.dir = 1; }
+      const nx = v.x1 + (v.x2 - v.x1) * v.t;
+      const nz = v.z1 + (v.z2 - v.z1) * v.t;
+      const dx = (v.x2 - v.x1) * v.dir;
+      const dz = (v.z2 - v.z1) * v.dir;
+      v.mesh.position.set(nx, getTerrainHeight(nx, nz), nz);
+      v.mesh.rotation.y = Math.atan2(dx, dz);
+      animateCharacterPose(v.mesh, true, false, dt);
+    }
+  });
 
   // Floating Dust Motes
   const dPos = dustGeo.attributes.position;
@@ -1167,7 +1456,6 @@ function animate() {
     pAttr.needsUpdate = true;
   }
 
-  // Active Falling Meteors
   for (let i = activeMeteors.length - 1; i >= 0; i--) {
     const m = activeMeteors[i];
     m.timer -= dt;
@@ -1203,7 +1491,7 @@ function animate() {
 
     const pz = eric.position.z;
     document.getElementById("zoneLabel").textContent =
-      pz < 17 ? "Lantern Square" : pz < 40 ? "Rushing River" : pz < 112 ? "Storm Ridge" : pz < 150 ? "Tidal Cove" : "Sunset Beach";
+      pz < 17 ? "Lantern Town" : pz < 40 ? "Rushing River" : pz < 112 ? "Storm Ridge" : pz < 150 ? "Tidal Cove" : "Sunset Beach";
 
     if (pz >= 150 && state.questStep === 5) updateQuestUI(6);
 
@@ -1227,7 +1515,11 @@ function animate() {
 
     const supportY = getSupportHeight(eric.position.x, eric.position.z, eric.position.y);
     const inWater = supportY < SEA_LEVEL - 0.35 && eric.position.y <= SEA_LEVEL - 0.15 && state.velY <= 0;
-    if (inWater && !state.isSwimming) AudioEngine.splash();
+    if (inWater && !state.isSwimming) {
+      AudioEngine.splash();
+      spawnSplash(eric.position.x, eric.position.z, 12);
+      spawnRipple(eric.position.x, eric.position.z, 3.2);
+    }
     state.isSwimming = inWater;
 
     if (!inWater && state.grounded) {
@@ -1250,6 +1542,11 @@ function animate() {
         eric.position.set(state.lastSafePos.x, state.lastSafePos.y + 0.3, state.lastSafePos.z);
         state.stamina = 45;
       }
+      state.rippleTimer += dt;
+      if (state.rippleTimer > (isMovingInput ? 0.25 : 0.65)) {
+        state.rippleTimer = 0;
+        spawnRipple(eric.position.x, eric.position.z, isMovingInput ? 2.6 : 1.6);
+      }
     } else if (wantsSprint && isMovingInput) {
       state.stamina = Math.max(0, state.stamina - dt * 20);
     } else {
@@ -1263,7 +1560,8 @@ function animate() {
 
     let moveX = state.windForceX * dt;
     let moveZ = 0;
-    if (inWater && pz >= 18 && pz <= 39) moveX += 2.2 * dt;
+    if (inWater && pz >= 18 && pz <= 39) moveX += 2.2 * dt; // River rapids current
+    if (inWater && pz > 112 && pz <= 150) moveX += Math.sin(elapsed * 0.9) * 1.1 * dt; // Ocean tide sway
 
     if (isMovingInput) {
       const len = Math.hypot(fwd, side);
@@ -1286,7 +1584,8 @@ function animate() {
 
     const floorY = getSupportHeight(eric.position.x, eric.position.z, eric.position.y);
     if (state.isSwimming) {
-      eric.position.y += (SEA_LEVEL - 0.85 + Math.sin(elapsed * 3) * 0.06 - eric.position.y) * dt * 8;
+      const waveY = getWaterHeight(eric.position.x, eric.position.z, elapsed);
+      eric.position.y += (waveY - 0.72 - eric.position.y) * dt * 8;
       state.velY = 0;
       state.grounded = false;
     } else if (eric.position.y < floorY - 0.15 && state.velY <= 0) {
@@ -1335,7 +1634,6 @@ function animate() {
   heroWarmLight.position.set(eric.position.x, eric.position.y + 2.4, eric.position.z);
   sunLight.position.set(eric.position.x + 18, eric.position.y + 30, eric.position.z + 24);
 
-  // Diorama Camera Tracking
   if (state.phase === "FLASH" || state.phase === "QUARREL" || state.phase === "JANE_LEAVING") {
     camera.position.lerp(new THREE.Vector3(0, 3.6, 4.2), 0.06);
     camera.lookAt(0, 1.35, -4);
@@ -1355,7 +1653,7 @@ function animate() {
   renderer.render(scene, camera);
 }
 
-/* 18. Safe Startup */
+/* 17. Safe Startup */
 function startGame() {
   try {
     setWorldGrayscale(0);
