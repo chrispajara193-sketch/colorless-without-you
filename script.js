@@ -1,5 +1,5 @@
 /* =========================================================
-   FINDING JANE — Realistic Atmospheric PBR & Sunset Edition
+   FINDING JANE — Daisies & Ice Cream Edition
    IBL Sky Reflections + Endless Shimmering Ocean + Smooth Terrain + Refined Humans
 ========================================================= */
 
@@ -59,9 +59,9 @@ const state = {
   dialogueIndex: 0,
   dialogueOnComplete: null,
   questStep: 0,
-  hasScarf: false,
+  hasDaisy: false,
   hasKey: false,
-  hasLocket: false,
+  hasIceCream: false,
   gateUnlocked: false,
   stamina: 100,
   vx: 0,
@@ -90,9 +90,9 @@ const state = {
 const QUEST_INFO = {
   0: { title: "The Separation", desc: "Listen to Jane..." },
   1: { title: "Follow Jane's Footsteps", desc: "Speak to Sora at her flower stall in Lantern Town." },
-  2: { title: "Cross the Rushing River", desc: "Swim or hop the river rocks to recover Jane's Red Scarf." },
+  2: { title: "Bouquet of Daisies", desc: "Swim or hop the river rocks to get a Bouquet of Daisies for Jane." },
   3: { title: "Find the Sky Key", desc: "Climb the East Mountain Cliff & dodge falling meteors for the Sky Key." },
-  4: { title: "Unlock the Summit Gate", desc: "Bring the Sky Key to the Summit Gate & claim Jane's Locket." },
+  4: { title: "Get an Ice Cream", desc: "Bring the Sky Key to the Summit Gate & get Jane's favorite Ice Cream." },
   5: { title: "Swim the Tidal Cove", desc: "Swim across the ocean sandbars to reach Sunset Beach." },
   6: { title: "Find Jane at Sunset Beach", desc: "Walk beside Jane on the sand and tell her how sorry you are." },
   7: { title: "Color Returned", desc: "Eric & Jane watching the sunset together." }
@@ -112,7 +112,6 @@ renderer.toneMappingExposure = 1.05;
 const maxAniso = Math.min(8, renderer.capabilities.getMaxAnisotropy());
 
 const scene = new THREE.Scene();
-// Warm horizon-matched atmospheric haze (eliminates hard horizon cutoffs!)
 scene.fog = new THREE.FogExp2(0xd6846e, 0.0048);
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 550);
@@ -191,7 +190,6 @@ const skyShaderMat = new THREE.ShaderMaterial({
       vec3 sky = mix(horizonCol, midCol, smoothstep(0.0, 0.28, h));
       sky = mix(sky, zenithCol, smoothstep(0.24, 0.85, h));
 
-      // Soft Wispy Sunset Clouds
       if (h > 0.02) {
         vec2 uv = d.xz / (h + 0.16) * 1.4;
         float c = fbm(uv + vec2(1.3, 2.7));
@@ -200,7 +198,6 @@ const skyShaderMat = new THREE.ShaderMaterial({
         sky = mix(sky, cloudLit, cloudMask * 0.55);
       }
 
-      // Realistic Glowing Sun Disc + Atmospheric Mie Scattering Bloom
       float sunDot = max(dot(d, sunDir), 0.0);
       float sunCore = smoothstep(0.9978, 0.9993, sunDot);
       float innerGlow = pow(sunDot, 36.0) * 0.75;
@@ -218,7 +215,6 @@ const skyShaderMat = new THREE.ShaderMaterial({
 const skyDome = new THREE.Mesh(new THREE.SphereGeometry(420, 48, 32), skyShaderMat);
 scene.add(skyDome);
 
-// Generate Real Image-Based Lighting (IBL) from the Sunset Sky for Natural Ocean & Surface Reflections
 (() => {
   const pmrem = new THREE.PMREMGenerator(renderer);
   const envScene = new THREE.Scene();
@@ -227,7 +223,7 @@ scene.add(skyDome);
   pmrem.dispose();
 })();
 
-/* 5. Smooth Procedural PBR Textures (Zero Blocky Pixels!) */
+/* 5. Smooth Procedural PBR Textures */
 function makeTileTexture() {
   const c = document.createElement("canvas");
   c.width = 512; c.height = 512;
@@ -265,7 +261,6 @@ function makeWoodTexture() {
     cx.fillStyle = "rgba(0,0,0,0.18)";
     cx.fillRect(0, y, 512, 2);
   }
-  // Fine subtle wood grain fibers
   for (let i = 0; i < 600; i++) {
     cx.fillStyle = i % 2 === 0 ? "rgba(255,225,190,0.04)" : "rgba(0,0,0,0.06)";
     cx.fillRect(Math.random() * 512, Math.random() * 512, 40 + Math.random() * 80, 1);
@@ -285,7 +280,6 @@ function makeSmoothGroundTexture() {
   cx.fillStyle = "#f2f2f2";
   cx.fillRect(0, 0, 512, 512);
 
-  // Soft airbrushed organic variation (no hard pixel squares!)
   for (let i = 0; i < 360; i++) {
     const x = Math.random() * 512;
     const y = Math.random() * 512;
@@ -300,7 +294,6 @@ function makeSmoothGroundTexture() {
     cx.fill();
   }
 
-  // Ultra-fine sand/soil micro-specks
   for (let i = 0; i < 4500; i++) {
     const v = 212 + Math.floor(Math.random() * 40);
     cx.fillStyle = `rgba(${v},${v},${v},0.22)`;
@@ -404,7 +397,6 @@ function getTerrainHeight(x, z) {
   if (z > 150) {
     if (z <= 165) {
       const beachT = Math.sin(((z - 150) / 15) * Math.PI);
-      // Keep central seating spot (|x| < 2.2) level so Eric & Jane sit evenly side-by-side!
       const duneRipple = Math.sin(x * 0.32) * 0.15 + Math.cos(x * 0.18 + z * 0.25) * 0.08;
       const flatFactor = Math.min(1, Math.max(0, (Math.abs(x) - 1.8) / 2.5));
       h = beachT * 1.18 + duneRipple * flatFactor;
@@ -463,7 +455,7 @@ const terrainMesh = new THREE.Mesh(
     vertexColors: true,
     map: groundTex,
     bumpMap: groundTex,
-    bumpScale: 0.05 // Subtle micro-grain without blocky pixel squares!
+    bumpScale: 0.05
   })
 );
 terrainMesh.receiveShadow = true;
@@ -485,7 +477,6 @@ mainRoad.position.set(0, 0.02, 7.5);
 mainRoad.receiveShadow = true;
 scene.add(mainRoad);
 
-// Endless Ocean & River Water Surface (stretches cleanly to horizon!)
 const waterGeo = new THREE.PlaneGeometry(540, 480, 64, 80);
 waterGeo.rotateX(-Math.PI / 2);
 waterGeo.translate(0, SEA_LEVEL, 235);
@@ -757,7 +748,6 @@ function createPalmTree(x, z) {
   colliders.push({ x, z, r: 0.7 });
 }
 
-// Town Buildings, Benches, Stalls & Lanterns
 createDioramaCottage(-15, -13, 0xd6b89c, 0x9f1239, 0.45);
 createDioramaCottage(15, -13, 0xcbd5e1, 0x3730a3, -0.45);
 createDioramaCottage(-16, -2, 0xe7d4c0, 0xbe123c, 1.25, 5.2, 4.0, 4.4);
@@ -910,7 +900,6 @@ umbrellaGroup.add(uPole, uTop);
 umbrellaGroup.position.set(5.5, getTerrainHeight(5.5, 155), 155);
 scene.add(umbrellaGroup);
 
-// Realistic Weathered Sea Stacks framing the ocean
 const seaStackGeo = makeNaturalRockGeo(1, 2);
 [[-22, 178, 4.2], [23, 175, 4.5], [-29, 156, 3.4], [28, 154, 3.8], [-25, 134, 3.0], [26, 128, 3.2]].forEach(([sx, sz, sr]) => {
   const stack = new THREE.Mesh(seaStackGeo, pbrMat(0x475569, 0.92, { map: groundTex, bumpMap: groundTex, bumpScale: 0.1 }));
@@ -1001,7 +990,6 @@ flowerMesh.instanceMatrix.needsUpdate = true;
 if (flowerMesh.instanceColor) flowerMesh.instanceColor.needsUpdate = true;
 scene.add(flowerMesh);
 
-// Smooth Weathered Cliff Boulders (No blocky low-poly facets!)
 const rockPos = [];
 for (let i = 0; i < 140; i++) {
   const rz = i < 25 ? (i % 2 === 0 ? 17.5 + Math.random() * 2 : 36.5 + Math.random() * 2) : 41 + Math.random() * 68;
@@ -1070,7 +1058,6 @@ bushPos.forEach((p, idx) => {
 bushMesh.instanceMatrix.needsUpdate = true;
 scene.add(bushMesh);
 
-// Beach Shells & Pebbles (keep center camera foreground clear!)
 const shellPos = [];
 for (let i = 0; i < 70; i++) {
   const sx = (Math.random() - 0.5) * 44;
@@ -1109,7 +1096,7 @@ const dustSystem = new THREE.Points(
 );
 scene.add(dustSystem);
 
-/* 9. Refined Humanoid Character Rig (Tucked Bangs, Smooth Shoulders, Natural Sitting) */
+/* 9. Refined Humanoid Character Rig */
 function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x1c1917, skin = 0xffdfc4, scarf = 0xf43f5e, isFemale = false }) {
   const g = new THREE.Group();
   const bodyPivot = new THREE.Group();
@@ -1122,7 +1109,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   const shoeMat = pbrMat(0x27272a, 0.55);
   const hairMat = pbrMat(hairColor, 0.62);
 
-  // Legs
   const thighGeo = new THREE.CapsuleGeometry(0.082, 0.26, 8, 14);
   thighGeo.translate(0, -0.21, 0);
   const shinGeo = new THREE.CapsuleGeometry(0.068, 0.25, 8, 14);
@@ -1157,7 +1143,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   const right = makeLeg(0.115);
   bodyPivot.add(left.hipGroup, right.hipGroup);
 
-  // Tailored Torso via LatheGeometry
   const profile = isFemale
     ? [
         new THREE.Vector2(0.01, 0.66),
@@ -1191,7 +1176,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   scarfTail.rotation.x = 0.14;
   bodyPivot.add(scarfRing, scarfTail);
 
-  // Smoothly Tucked Shoulders & Arms
   const upperArmGeo = new THREE.CapsuleGeometry(0.056, 0.21, 8, 12);
   upperArmGeo.translate(0, -0.13, 0);
   const forearmGeo = new THREE.CapsuleGeometry(0.050, 0.19, 8, 12);
@@ -1224,7 +1208,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   const rightArm = makeArm(isFemale ? 0.205 : 0.235);
   bodyPivot.add(leftArm.shoulderGroup, rightArm.shoulderGroup);
 
-  // Realistic Head Proportions
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.062, 0.075, 0.16, 12), skinMat);
   neck.position.set(0, 0.63, 0);
   bodyPivot.add(neck);
@@ -1262,7 +1245,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   nose.position.set(0, -0.035, 0.192);
   headGroup.add(nose);
 
-  // Clean Sculpted Hair (Zero tips poking above scalp!)
   const scalp = new THREE.Mesh(
     new THREE.SphereGeometry(0.208, 24, 24, 0, Math.PI * 2, 0, Math.PI * 0.65),
     hairMat
@@ -1273,7 +1255,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   scalp.castShadow = true;
   headGroup.add(scalp);
 
-  // Tucked Forehead Bangs (angled downward inside hairline)
   [-0.09, -0.03, 0.03, 0.09].forEach((bx) => {
     const bang = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.07, 4, 8), hairMat);
     bang.position.set(bx, 0.085, 0.155 - Math.abs(bx) * 0.2);
@@ -1496,14 +1477,89 @@ villagers.forEach((v) => {
   }
 });
 
-/* 10. Collectibles, Waypoint & Meteors */
-const scarfItem = new THREE.Mesh(
-  new THREE.TorusKnotGeometry(0.32, 0.09, 36, 8),
-  new THREE.MeshBasicMaterial({ color: 0xf43f5e })
-);
-scarfItem.position.set(-5.8, 0.9, 28);
-scarfItem.visible = false;
-scene.add(scarfItem);
+/* 10. Collectibles (Bouquet of Daisies, Sky Key, Ice Cream) & Waypoint */
+function createDaisyBouquet() {
+  const g = new THREE.Group();
+
+  // Paper Wrap Cone (tip pointing down)
+  const wrap = new THREE.Mesh(
+    new THREE.ConeGeometry(0.30, 0.56, 12),
+    pbrMat(0xf5deb3, 0.88)
+  );
+  wrap.rotation.x = Math.PI;
+  wrap.position.y = 0.05;
+  g.add(wrap);
+
+  // Ribbon Tie
+  const ribbon = new THREE.Mesh(
+    new THREE.TorusGeometry(0.14, 0.032, 8, 16),
+    pbrMat(0xf43f5e, 0.6)
+  );
+  ribbon.rotation.x = Math.PI / 2;
+  ribbon.position.y = -0.02;
+  g.add(ribbon);
+
+  // 5 Cute Daisies blooming out of the top
+  const spots = [
+    [0, 0.38, 0],
+    [-0.15, 0.33, 0.10],
+    [0.15, 0.33, 0.10],
+    [-0.11, 0.34, -0.13],
+    [0.12, 0.34, -0.12]
+  ];
+  const centerMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
+  const petalMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+  spots.forEach(([dx, dy, dz]) => {
+    const fl = new THREE.Group();
+    fl.position.set(dx, dy, dz);
+    fl.rotation.set((Math.random() - 0.5) * 0.4, 0, (Math.random() - 0.5) * 0.4);
+
+    const center = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), centerMat);
+    fl.add(center);
+
+    for (let p = 0; p < 6; p++) {
+      const ang = (p / 6) * Math.PI * 2;
+      const petal = new THREE.Mesh(new THREE.SphereGeometry(0.048, 6, 6), petalMat);
+      petal.scale.set(1.25, 0.4, 0.85);
+      petal.position.set(Math.cos(ang) * 0.095, 0, Math.sin(ang) * 0.095);
+      petal.rotation.y = -ang;
+      fl.add(petal);
+    }
+    g.add(fl);
+  });
+
+  return g;
+}
+
+function createIceCreamCone() {
+  const g = new THREE.Group();
+
+  // Waffle Cone (tip pointing down)
+  const cone = new THREE.Mesh(
+    new THREE.ConeGeometry(0.24, 0.58, 12),
+    pbrMat(0xd97706, 0.85, { map: woodTex })
+  );
+  cone.rotation.x = Math.PI;
+  cone.position.y = 0.05;
+  g.add(cone);
+
+  // Bottom Vanilla Scoop + Top Strawberry Scoop + Cherry
+  const scoop1 = new THREE.Mesh(new THREE.SphereGeometry(0.24, 14, 14), pbrMat(0xfef3c7, 0.55));
+  scoop1.position.y = 0.34;
+  const scoop2 = new THREE.Mesh(new THREE.SphereGeometry(0.20, 14, 14), pbrMat(0xfb7185, 0.55));
+  scoop2.position.y = 0.58;
+  const cherry = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 10), pbrMat(0xef4444, 0.3));
+  cherry.position.y = 0.79;
+
+  g.add(scoop1, scoop2, cherry);
+  return g;
+}
+
+const daisyItem = createDaisyBouquet();
+daisyItem.position.set(-5.8, 0.85, 28);
+daisyItem.visible = false;
+scene.add(daisyItem);
 
 const keyItem = new THREE.Mesh(
   new THREE.TorusGeometry(0.32, 0.09, 8, 16),
@@ -1513,13 +1569,10 @@ keyItem.position.set(14.2, keyCliffY + 0.9, 59);
 keyItem.visible = false;
 scene.add(keyItem);
 
-const locketItem = new THREE.Mesh(
-  new THREE.OctahedronGeometry(0.4),
-  new THREE.MeshBasicMaterial({ color: 0x38bdf8 })
-);
-locketItem.position.set(0, summitY + 1.1, 78);
-locketItem.visible = false;
-scene.add(locketItem);
+const iceCreamItem = createIceCreamCone();
+iceCreamItem.position.set(0, summitY + 0.95, 78);
+iceCreamItem.visible = false;
+scene.add(iceCreamItem);
 
 const beacon = new THREE.Mesh(
   new THREE.CylinderGeometry(0.45, 0.45, 22, 16, 1, true),
@@ -1640,9 +1693,9 @@ function updateQuestUI(step) {
   document.getElementById("questTitle").textContent = info.title;
   document.getElementById("questDesc").textContent = info.desc;
   document.getElementById("compassLine").hidden = step === 0 || step === 7;
-  document.getElementById("badgeScarf").classList.toggle("owned", state.hasScarf);
-  document.getElementById("badgeKey").classList.toggle("owned", state.hasKey);
-  document.getElementById("badgeLocket").classList.toggle("owned", state.hasLocket);
+  document.getElementById("badgeDaisy")?.classList.toggle("owned", state.hasDaisy);
+  document.getElementById("badgeKey")?.classList.toggle("owned", state.hasKey);
+  document.getElementById("badgeIceCream")?.classList.toggle("owned", state.hasIceCream);
 }
 
 function showAlert(msg, ms = 2400) {
@@ -1704,25 +1757,25 @@ function interactWithTarget(target) {
     startDialogue(
       [
         { speaker: "Sora", role: "Lantern Keeper", text: "Eric! Jane hurried north out of town crying—the river bridge collapsed, so she crossed the rocks!" },
-        { speaker: "Sora", role: "Lantern Keeper", text: "I saw her red scarf snag out in the rushing river. Watch your stamina in the water, and watch for falling meteors up on Storm Ridge!" }
+        { speaker: "Sora", role: "Lantern Keeper", text: "Grab her favorite Bouquet of Daisies out on the river rock first, then climb Storm Ridge to get her an Ice Cream before reaching the beach!" }
       ],
       () => {
-        scarfItem.visible = true;
+        daisyItem.visible = true;
         updateQuestUI(2);
       }
     );
   } else if (target.id === "sora") {
-    startDialogue([{ speaker: "Sora", role: "Lantern Keeper", text: "Follow the warm beacon north, Eric. She's waiting beyond the ridge by the ocean!" }]);
-  } else if (target.id === "scarf" && state.questStep === 2) {
-    scarfItem.visible = false;
-    state.hasScarf = true;
+    startDialogue([{ speaker: "Sora", role: "Lantern Keeper", text: "Follow the warm beacon north, Eric. Bring her the daisies and ice cream!" }]);
+  } else if (target.id === "daisy" && state.questStep === 2) {
+    daisyItem.visible = false;
+    state.hasDaisy = true;
     AudioEngine.sparkle();
     setWorldGrayscale(75);
     keyItem.visible = true;
     updateQuestUI(3);
     startDialogue([
-      { speaker: "Eric", role: "", text: "Jane's Red Scarf... Holding it brings back a spark of warm light." },
-      { speaker: "Eric", role: "", text: "The Summit Gate ahead is locked. I need the Sky Key from the East Cliff ledge!" }
+      { speaker: "Eric", role: "", text: "Got a fresh Bouquet of Daisies! Holding it brings back a spark of warm light." },
+      { speaker: "Eric", role: "", text: "Now I need the Sky Key from the East Cliff ledge to unlock the Summit Gate!" }
     ]);
   } else if (target.id === "key" && state.questStep === 3) {
     keyItem.visible = false;
@@ -1730,22 +1783,22 @@ function interactWithTarget(target) {
     AudioEngine.sparkle();
     setWorldGrayscale(55);
     updateQuestUI(4);
-    startDialogue([{ speaker: "Eric", role: "", text: "Got the Sky Key! Now I can unlock the Summit Torii Gate at the top of the ridge!" }]);
+    startDialogue([{ speaker: "Eric", role: "", text: "Got the Sky Key! Now I can unlock the Summit Torii Gate and get Jane's favorite Ice Cream!" }]);
   } else if (target.id === "gate" && state.questStep === 4) {
     state.gateUnlocked = true;
     gateDoor.visible = false;
-    locketItem.visible = true;
+    iceCreamItem.visible = true;
     AudioEngine.sparkle();
     showAlert("🗝️ Summit Gate Unlocked!", 2200);
-  } else if (target.id === "locket" && state.questStep === 4) {
-    locketItem.visible = false;
-    state.hasLocket = true;
+  } else if (target.id === "icecream" && state.questStep === 4) {
+    iceCreamItem.visible = false;
+    state.hasIceCream = true;
     AudioEngine.sparkle();
     setWorldGrayscale(30);
     updateQuestUI(5);
     startDialogue([
-      { speaker: "Eric", role: "", text: "Her Silver Locket! Look past the cliffs—I can see the Tidal Cove and the beach!" },
-      { speaker: "Eric", role: "", text: "Swim across the sandbars to reach Jane before the sun sets!" }
+      { speaker: "Eric", role: "", text: "Got her favorite Ice Cream! Look past the cliffs—I can see the Tidal Cove and the beach!" },
+      { speaker: "Eric", role: "", text: "Swim across the sandbars to reach Jane before it melts and before the sun sets!" }
     ]);
   } else if (target.id === "jane" && (state.questStep === 5 || state.questStep === 6)) {
     startDialogue([
@@ -1756,7 +1809,7 @@ function interactWithTarget(target) {
         text: "Stand beside Jane and tell her what you really mean:",
         choices: [
           {
-            label: "Nakita ko na yung mali ko. Hindi na ako tatakbo sa lahat ng problema, hindi ko na haharapin ng mag isa, haharapin ko na 'to nang kasama ka.'",
+            label: "Nakita ko na yung mali ko. Hindi na ako tatakbo sa lahat ng problema, hindi ko na haharapin ng mag isa, haharapin ko na 'to nang kasama ka.",
             onPick: () => triggerSunsetFinale()
           }
         ]
@@ -1773,6 +1826,7 @@ function triggerSunsetFinale() {
 
   startDialogue(
     [
+      { speaker: "Eric", role: "", text: "Dala ko yung favorite mong bouquet of daisies at ice cream, love." },
       { speaker: "Eric", role: "", text: "Sorry love, kung paulit-ulit na nawawalan ka ng peace of mind dahil hindi ako nakikinig nang maayos." },
       { speaker: "Eric", role: "", text: "Simula ngayon, ako na yung unang lalapit at gagawa ng paraan." },
       { speaker: "Jane", role: "Smiling softly", text: "Ayoko lang naman maramdaman na mag-isa ako sa relasyon na 'to, love." },
@@ -1826,10 +1880,10 @@ function canMoveTo(nx, nz, currentY) {
 
 function getCurrentObjectivePos() {
   if (state.questStep === 1) return { x: sora.position.x, z: sora.position.z };
-  if (state.questStep === 2) return { x: scarfItem.position.x, z: scarfItem.position.z };
+  if (state.questStep === 2) return { x: daisyItem.position.x, z: daisyItem.position.z };
   if (state.questStep === 3) return { x: keyItem.position.x, z: keyItem.position.z };
   if (state.questStep === 4) {
-    return state.gateUnlocked ? { x: locketItem.position.x, z: locketItem.position.z } : { x: 0, z: 74 };
+    return state.gateUnlocked ? { x: iceCreamItem.position.x, z: iceCreamItem.position.z } : { x: 0, z: 74 };
   }
   if (state.questStep === 5 || state.questStep === 6) return { x: jane.position.x, z: jane.position.z };
   return null;
@@ -1841,8 +1895,8 @@ function findNearbyInteractable() {
   const pz = eric.position.z;
 
   if (Math.hypot(px - sora.position.x, pz - sora.position.z) < 3.2) return { id: "sora", label: "Talk to Sora" };
-  if (state.questStep === 2 && scarfItem.visible && Math.hypot(px - scarfItem.position.x, pz - scarfItem.position.z) < 2.6) {
-    return { id: "scarf", label: "Take Red Scarf" };
+  if (state.questStep === 2 && daisyItem.visible && Math.hypot(px - daisyItem.position.x, pz - daisyItem.position.z) < 2.6) {
+    return { id: "daisy", label: "Pick up Bouquet of Daisies" };
   }
   if (state.questStep === 3 && keyItem.visible && Math.hypot(px - keyItem.position.x, pz - keyItem.position.z) < 2.6) {
     return { id: "key", label: "Pick up Sky Key" };
@@ -1850,8 +1904,8 @@ function findNearbyInteractable() {
   if (state.questStep === 4 && !state.gateUnlocked && Math.hypot(px, pz - 74.2) < 3.2) {
     return { id: "gate", label: "Unlock Summit Gate" };
   }
-  if (state.questStep === 4 && state.gateUnlocked && locketItem.visible && Math.hypot(px - locketItem.position.x, pz - locketItem.position.z) < 2.8) {
-    return { id: "locket", label: "Claim Silver Locket" };
+  if (state.questStep === 4 && state.gateUnlocked && iceCreamItem.visible && Math.hypot(px - iceCreamItem.position.x, pz - iceCreamItem.position.z) < 2.8) {
+    return { id: "icecream", label: "Get Ice Cream" };
   }
   if ((state.questStep === 5 || state.questStep === 6) && Math.hypot(px - jane.position.x, pz - jane.position.z) < 3.5) {
     return { id: "jane", label: "Speak to Jane" };
@@ -1959,10 +2013,8 @@ function animate() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const elapsed = clock.getElapsedTime();
 
-  // Keep sky dome centered on camera so horizon & sunset never clip
   skyDome.position.copy(camera.position);
 
-  // Scroll Water Wave Normal Map + Gentle Vertex Waves
   waterNormalTex.offset.x += dt * 0.032;
   waterNormalTex.offset.y += dt * 0.022;
   const wPos = waterGeo.attributes.position;
@@ -2062,9 +2114,9 @@ function animate() {
   }
   dPos.needsUpdate = true;
 
-  if (scarfItem.visible) { scarfItem.rotation.y += dt * 2.5; scarfItem.position.y = 0.9 + Math.sin(elapsed * 3) * 0.14; }
+  if (daisyItem.visible) { daisyItem.rotation.y += dt * 1.8; daisyItem.position.y = 0.85 + Math.sin(elapsed * 3) * 0.14; }
   if (keyItem.visible) { keyItem.rotation.y += dt * 2.5; keyItem.position.y = keyCliffY + 0.9 + Math.sin(elapsed * 3) * 0.14; }
-  if (locketItem.visible) { locketItem.rotation.y += dt * 2.5; locketItem.position.y = summitY + 1.1 + Math.sin(elapsed * 3) * 0.14; }
+  if (iceCreamItem.visible) { iceCreamItem.rotation.y += dt * 1.8; iceCreamItem.position.y = summitY + 0.95 + Math.sin(elapsed * 3) * 0.14; }
 
   if (petalSystem) {
     const pAttr = petalSystem.geometry.attributes.position;
