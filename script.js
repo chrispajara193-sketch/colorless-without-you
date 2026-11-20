@@ -1695,7 +1695,7 @@ function finishJaneLeaving() {
 
   startDialogue([
     { speaker: "Eric", role: "Realization", text: "Nawalan ng kulay yung buong mundo..." },
-    { speaker: "Eric", role: "", text: "Tama siya. Hindi pwedeng maghintay na naman ako na siya yung unang kumausap. Ako ang lalapit at magbabawi ngayon." }
+    { speaker: "Eric", role: "", text: "Tama siya. Hindi pwedeng maghintay na naman ako na siya yung unang kumausap. Ako ang lalapit at babawi ngayon." }
   ]);
 }
 
@@ -1760,7 +1760,7 @@ function interactWithTarget(target) {
             onPick: () => triggerSunsetFinale()
           },
           {
-            label: "2. 'Nakita ko na yung mali ko. Hindi na ako maghihintay sa tahimik kapag hindi ka okay.'",
+            label: "2. 'Nakita ko na yung mali ko. Hindi na ako tatakbo sa lahat ng problema, hindi ko na haharapin ng mag isa, haharapin ko na 'to nang kasama ka.'",
             onPick: () => triggerSunsetFinale()
           }
         ]
