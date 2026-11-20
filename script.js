@@ -1756,11 +1756,7 @@ function interactWithTarget(target) {
         text: "Stand beside Jane and tell her what you really mean:",
         choices: [
           {
-            label: "1. 'Sorry love, kung paulit-ulit nalang. Hindi na kita hahayaang magbuhat mag-isa.'",
-            onPick: () => triggerSunsetFinale()
-          },
-          {
-            label: "2. 'Nakita ko na yung mali ko. Hindi na ako tatakbo sa lahat ng problema, hindi ko na haharapin ng mag isa, haharapin ko na 'to nang kasama ka.'",
+            label: "Nakita ko na yung mali ko. Hindi na ako tatakbo sa lahat ng problema, hindi ko na haharapin ng mag isa, haharapin ko na 'to nang kasama ka.'",
             onPick: () => triggerSunsetFinale()
           }
         ]
@@ -1778,7 +1774,7 @@ function triggerSunsetFinale() {
   startDialogue(
     [
       { speaker: "Eric", role: "", text: "Sorry love, kung paulit-ulit na nawawalan ka ng peace of mind dahil hindi ako nakikinig nang maayos." },
-      { speaker: "Eric", role: "", text: "Hindi mo pinapangunahan yung mga bagay—iniisip mo lang kami. Simula ngayon, ako na yung unang lalapit at gagawa ng paraan." },
+      { speaker: "Eric", role: "", text: "Simula ngayon, ako na yung unang lalapit at gagawa ng paraan." },
       { speaker: "Jane", role: "Smiling softly", text: "Ayoko lang naman maramdaman na mag-isa ako sa relasyon na 'to, love." },
       { speaker: "Jane", role: "", text: "Upo ka na dito sa tabi ko. Panoorin natin yung sunset." }
     ],
