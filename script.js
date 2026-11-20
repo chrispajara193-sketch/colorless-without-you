@@ -1,6 +1,6 @@
 /* =========================================================
-   FINDING JANE — Humanoid Physics & Chibi Diorama Edition
-   Walk/Run Momentum + Jump/Land Squash + Horizontal Swim Physics
+   FINDING JANE — Detailed Terrain & Humanoid Physics Edition
+   Bump-Mapped Terrain + Cliff Boulders + Wildflowers + Reeds + Sea Stacks
 ========================================================= */
 
 const SEA_LEVEL = -0.25;
@@ -109,7 +109,7 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.08;
 
 const scene = new THREE.Scene();
-scene.fog = new THREE.FogExp2(0x2a1f36, 0.013);
+scene.fog = new THREE.FogExp2(0x2a1f36, 0.0125);
 
 const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 360);
 
@@ -134,7 +134,7 @@ scene.add(sunLight.target);
 const heroWarmLight = new THREE.PointLight(0xfbbf24, 0.72, 11);
 scene.add(heroWarmLight);
 
-/* 4. Procedural Textures */
+/* 4. Procedural Textures (Tiles, Wood, & Ground Bump/Grain) */
 function makeTileTexture() {
   const c = document.createElement("canvas");
   c.width = 256; c.height = 256;
@@ -176,8 +176,31 @@ function makeWoodTexture() {
   return tex;
 }
 
+function makeTerrainDetailTexture() {
+  const c = document.createElement("canvas");
+  c.width = 256; c.height = 256;
+  const cx = c.getContext("2d");
+  cx.fillStyle = "#ebebeb";
+  cx.fillRect(0, 0, 256, 256);
+
+  // Subtle organic earth, pebble & grass grain
+  for (let i = 0; i < 2400; i++) {
+    const x = Math.random() * 256;
+    const y = Math.random() * 256;
+    const shade = 205 + Math.floor(Math.random() * 50);
+    cx.fillStyle = `rgb(${shade},${shade},${shade})`;
+    cx.fillRect(x, y, 2 + Math.random() * 2, 2 + Math.random() * 2);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(22, 44);
+  return tex;
+}
+
 const tileTex = makeTileTexture();
 const woodTex = makeWoodTexture();
+const terrainDetailTex = makeTerrainDetailTexture();
 
 function cozyMat(color, roughness = 0.82, extra = {}) {
   return new THREE.MeshStandardMaterial({ color, roughness, metalness: 0.05, ...extra });
@@ -231,34 +254,57 @@ sunHalo.position.set(0, 20, 246);
 sunHalo.rotation.y = Math.PI;
 scene.add(sunHalo);
 
-/* 6. Multi-Biome Terrain & Water Surface Math */
+/* 6. Detailed Organic Multi-Biome Terrain & Water Surface */
 function mountainTrailX(z) {
   if (z < 42 || z > 110) return 0;
   return Math.sin(((z - 42) / 68) * Math.PI * 2) * 10.5;
 }
 
+function organicNoise(x, z) {
+  return (
+    Math.sin(x * 0.23 + z * 0.19) * 0.22 +
+    Math.cos(x * 0.43 - z * 0.31) * 0.14 +
+    Math.sin(x * 0.71 + z * 0.67) * 0.06
+  );
+}
+
 function getTerrainHeight(x, z) {
   let h = 0;
+  const n = organicNoise(x, z);
+
+  // Town Valley (keep central town flat for cottages & plaza, gentle rolling hills at outer meadow!)
   if (z < 18) {
     h = 0;
+    const distFromCenter = Math.hypot(x, z + 4);
+    if (distFromCenter > 13 && Math.abs(x) > 4.5 && z > -16) {
+      h += Math.max(0, n) * 0.65;
+    }
     const edge = Math.max(0, Math.abs(x) - 24);
-    h += Math.pow(edge, 1.35) * 0.32;
+    h += Math.pow(edge, 1.35) * 0.34 + (edge > 0 ? n * 0.7 : 0);
   }
+
+  // Rushing River Gorge (Z: 17 to 39)
   if (z >= 17 && z <= 39) {
     const t = Math.sin(((z - 17) / 22) * Math.PI);
-    h -= t * 2.1;
+    h -= t * 2.15;
+    h += n * 0.25;
   }
+
+  // Storm Ridge Mountain Pass (Z: 40 to 112)
   if (z >= 40 && z <= 112) {
     const ridgeT = Math.sin(((z - 40) / 72) * Math.PI);
     const baseHeight = Math.pow(ridgeT, 1.15) * 11.5;
     const tx = mountainTrailX(z);
     const distFromTrail = Math.abs(x - tx);
-    const cliffBump = distFromTrail > 3.7 ? Math.min(9, (distFromTrail - 3.7) * 1.45) : 0;
+    // Keep trail walkable with gentle texture; raise rocky crags on cliffs!
+    const cliffBump = distFromTrail > 3.7 ? Math.min(9.5, (distFromTrail - 3.7) * 1.48) + n * 1.6 : n * 0.18;
     h = baseHeight + cliffBump;
   }
+
+  // Tidal Sea Cove & Sandbars (Z: 112 to 150)
   if (z > 112 && z <= 150) {
     const seaT = Math.sin(((z - 112) / 38) * Math.PI);
-    h = -seaT * 2.3;
+    h = -seaT * 2.3 + n * 0.2;
     const d1 = Math.hypot(x + 4.5, z - 122);
     const d2 = Math.hypot(x - 4.5, z - 132);
     const d3 = Math.hypot(x + 1.5, z - 141);
@@ -266,10 +312,13 @@ function getTerrainHeight(x, z) {
     if (d2 < 4.8) h = Math.max(h, (1 - d2 / 4.8) * 1.2 - 0.1);
     if (d3 < 4.5) h = Math.max(h, (1 - d3 / 4.5) * 1.1 - 0.1);
   }
+
+  // Sunset Beach Sand Dunes (Z: 150 to 165) -> Open Ocean (Z > 165)
   if (z > 150) {
     if (z <= 165) {
       const beachT = Math.sin(((z - 150) / 15) * Math.PI);
-      h = beachT * 1.15;
+      const duneRipple = Math.sin(x * 0.32) * 0.16 + Math.cos(x * 0.18 + z * 0.25) * 0.1;
+      h = beachT * 1.18 + duneRipple * (Math.abs(x) > 3 ? 1 : 0.35);
     } else {
       h = -2.6;
     }
@@ -281,17 +330,20 @@ function getWaterHeight(x, z, time) {
   return SEA_LEVEL + Math.sin(time * 2.4 + x * 0.28 + z * 0.22) * 0.11 + Math.cos(time * 1.7 - z * 0.2) * 0.06;
 }
 
-const terrainGeo = new THREE.PlaneGeometry(108, 220, 100, 180);
+const terrainGeo = new THREE.PlaneGeometry(108, 220, 130, 220);
 terrainGeo.rotateX(-Math.PI / 2);
 terrainGeo.translate(0, 0, 75);
 
 const posAttr = terrainGeo.attributes.position;
 const colArr = new Float32Array(posAttr.count * 3);
 const cTownGrass = new THREE.Color(0x3f7a58);
+const cDeepGrass = new THREE.Color(0x2f6145);
 const cPlaza = new THREE.Color(0xb58d67);
-const cMountain = new THREE.Color(0x4a4e5e);
-const cSummit = new THREE.Color(0x528065);
-const cSand = new THREE.Color(0xdcb87c);
+const cMountainRock = new THREE.Color(0x474c5c);
+const cDarkRock = new THREE.Color(0x333745);
+const cSummit = new THREE.Color(0x6da17e);
+const cSand = new THREE.Color(0xe0bd80);
+const cWetSand = new THREE.Color(0xb58b52);
 const cSeaBed = new THREE.Color(0x164e63);
 
 for (let i = 0; i < posAttr.count; i++) {
@@ -300,25 +352,45 @@ for (let i = 0; i < posAttr.count; i++) {
   const vy = getTerrainHeight(vx, vz);
   posAttr.setY(i, vy);
 
-  let col = cTownGrass;
-  if (vz < 16 && Math.hypot(vx, vz + 4) < 8.6) col = cPlaza;
-  else if (vz >= 17 && vz <= 39 && vy < 0.1) col = cSand;
-  else if (vz >= 40 && vz <= 112) {
-    col = Math.abs(vx - mountainTrailX(vz)) < 3.6 ? (vy > 8 ? cSummit : cSand) : cMountain;
+  const n = organicNoise(vx, vz);
+  let col = n > 0 ? cTownGrass : cDeepGrass;
+
+  if (vz < 16 && Math.hypot(vx, vz + 4) < 8.6) {
+    col = cPlaza;
+  } else if (vz >= 17 && vz <= 39) {
+    col = vy < 0.05 ? cWetSand : cSand;
+  } else if (vz >= 40 && vz <= 112) {
+    const onTrail = Math.abs(vx - mountainTrailX(vz)) < 3.6;
+    if (onTrail) {
+      col = vy > 8.5 ? cSummit : cSand;
+    } else {
+      col = vy > 11 ? cSummit : n > 0 ? cMountainRock : cDarkRock;
+    }
   } else if (vz > 112) {
-    col = vy > -0.15 ? cSand : cSeaBed;
+    if (vy > 0.2) col = cSand;
+    else if (vy > -0.22) col = cWetSand;
+    else col = cSeaBed;
   }
   colArr[i * 3] = col.r; colArr[i * 3 + 1] = col.g; colArr[i * 3 + 2] = col.b;
 }
 terrainGeo.setAttribute("color", new THREE.BufferAttribute(colArr, 3));
 terrainGeo.computeVertexNormals();
-const terrainMesh = new THREE.Mesh(terrainGeo, cozyMat(0xffffff, 0.92, { vertexColors: true }));
+
+const terrainMesh = new THREE.Mesh(
+  terrainGeo,
+  cozyMat(0xffffff, 0.9, {
+    vertexColors: true,
+    map: terrainDetailTex,
+    bumpMap: terrainDetailTex,
+    bumpScale: 0.35
+  })
+);
 terrainMesh.receiveShadow = true;
 scene.add(terrainMesh);
 
 const tiledPlaza = new THREE.Mesh(
   new THREE.CylinderGeometry(8.5, 8.6, 0.08, 36),
-  cozyMat(0xffffff, 0.78, { map: tileTex })
+  cozyMat(0xffffff, 0.78, { map: tileTex, bumpMap: tileTex, bumpScale: 0.12 })
 );
 tiledPlaza.position.set(0, 0.03, -4);
 tiledPlaza.receiveShadow = true;
@@ -326,7 +398,7 @@ scene.add(tiledPlaza);
 
 const mainRoad = new THREE.Mesh(
   new THREE.BoxGeometry(4.4, 0.06, 20),
-  cozyMat(0xd6c0a1, 0.85, { map: tileTex })
+  cozyMat(0xd6c0a1, 0.85, { map: tileTex, bumpMap: tileTex, bumpScale: 0.1 })
 );
 mainRoad.position.set(0, 0.02, 7.5);
 mainRoad.receiveShadow = true;
@@ -420,7 +492,7 @@ shoreFoam.rotation.x = -Math.PI / 2;
 shoreFoam.position.set(0, SEA_LEVEL + 0.12, 164.5);
 scene.add(shoreFoam);
 
-/* 8. Dense Town, Mountain Forest, Instanced Grass & Sunset Beach */
+/* 8. Landmarks, Town, Forest, Instanced Terrain Props & Beach Details */
 const colliders = [];
 const platforms = [];
 const boxPlatforms = [];
@@ -431,7 +503,7 @@ const bonfireSparks = [];
 let petalSystem = null;
 
 function addPlatformRock(x, z, y, r = 1.7) {
-  const rock = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 1.1, 1.4, 8), cozyMat(0x64748b, 0.9));
+  const rock = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.92, r * 1.1, 1.4, 8), cozyMat(0x64748b, 0.9, { bumpMap: terrainDetailTex, bumpScale: 0.25 }));
   rock.position.set(x, y - 0.7, z);
   rock.castShadow = true;
   rock.receiveShadow = true;
@@ -520,6 +592,32 @@ function createLanternPost(x, z, withPointLight = false) {
   scene.add(g);
 }
 
+function createStonePathLantern(x, z) {
+  const y = getTerrainHeight(x, z);
+  const g = new THREE.Group();
+  const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 1.1, 0.35), cozyMat(0x64748b, 0.9));
+  post.position.y = 0.55;
+  const glow = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.28, 0.24), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+  glow.position.y = 1.2;
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.45, 0.25, 4), cozyMat(0x475569, 0.9));
+  cap.position.y = 1.45; cap.rotation.y = Math.PI / 4;
+  g.add(post, glow, cap);
+  g.position.set(x, y, z);
+  scene.add(g);
+}
+
+function createTrailSignpost(x, z, rotY = 0) {
+  const g = new THREE.Group();
+  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 1.8), cozyMat(0x78350f, 0.9));
+  post.position.y = 0.9;
+  const board = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.35, 0.12), cozyMat(0xb45309, 0.85, { map: woodTex }));
+  board.position.set(0.2, 1.5, 0);
+  g.add(post, board);
+  g.position.set(x, getTerrainHeight(x, z), z);
+  g.rotation.y = rotY;
+  scene.add(g);
+}
+
 function createBench(x, z, rotY = 0) {
   const g = new THREE.Group();
   const seat = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.18, 0.75), cozyMat(0x92400e, 0.85, { map: woodTex }));
@@ -559,6 +657,7 @@ function createPalmTree(x, z) {
   colliders.push({ x, z, r: 0.7 });
 }
 
+// Town Houses, Benches, Stalls & Lanterns
 createDioramaCottage(-15, -13, 0xd6b89c, 0x9f1239, 0.45);
 createDioramaCottage(15, -13, 0xcbd5e1, 0x3730a3, -0.45);
 createDioramaCottage(-16, -2, 0xe7d4c0, 0xbe123c, 1.25, 5.2, 4.0, 4.4);
@@ -642,6 +741,26 @@ const summitLight = new THREE.PointLight(0xfbbf24, 1.4, 18);
 summitLight.position.set(0, summitY + 4, 76);
 scene.add(summitLight);
 
+// Stone Stairway Steps leading up to the Summit Torii Gate (Z = 68..74)
+for (let sz = 68; sz <= 74; sz += 1.4) {
+  const sx = mountainTrailX(sz);
+  const sy = getTerrainHeight(sx, sz);
+  const step = new THREE.Mesh(new THREE.BoxGeometry(3.8, 0.25, 1.1), cozyMat(0x94a3b8, 0.9, { bumpMap: terrainDetailTex, bumpScale: 0.2 }));
+  step.position.set(sx, sy + 0.05, sz);
+  step.receiveShadow = true;
+  scene.add(step);
+}
+
+// Mountain Trail Lanterns & Signposts
+[44, 52, 60, 68, 84, 93, 102].forEach((lz, i) => {
+  const lx = mountainTrailX(lz) + (i % 2 === 0 ? -3.4 : 3.4);
+  createStonePathLantern(lx, lz);
+});
+createTrailSignpost(-3.2, 41.5, 0.3);
+createTrailSignpost(mountainTrailX(59) - 3.6, 59, -0.4);
+createTrailSignpost(3.2, 110.5, -0.25);
+
+// Mountain Forest (38 trees)
 for (let i = 0; i < 38; i++) {
   const mz = 43 + (i / 38) * 65;
   const side = i % 2 === 0 ? 1 : -1;
@@ -656,6 +775,7 @@ for (let i = 0; i < 38; i++) {
   createStylizedTree(x, z, t)
 );
 
+// Beach Props + Coastal Sea Stacks + Driftwood
 createPalmTree(-12, 155);
 createPalmTree(13, 156);
 createPalmTree(-17, 159);
@@ -678,6 +798,15 @@ boat.rotation.set(0.08, -0.45, 0.12);
 scene.add(boat);
 colliders.push({ x: 9.5, z: 159, r: 2.0 });
 
+// Driftwood Logs on Sand
+[[-5.5, 155.5, 0.4], [14.5, 161.5, -0.7]].forEach(([dx, dz, rot]) => {
+  const log = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 2.8, 7), cozyMat(0x785a40, 0.9, { map: woodTex }));
+  log.rotation.set(Math.PI / 2, 0, rot);
+  log.position.set(dx, getTerrainHeight(dx, dz) + 0.15, dz);
+  log.castShadow = true;
+  scene.add(log);
+});
+
 const umbrellaGroup = new THREE.Group();
 const uPole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.8), cozyMat(0xe2e8f0));
 uPole.position.y = 1.4;
@@ -686,6 +815,15 @@ uTop.position.y = 2.7; uTop.castShadow = true;
 umbrellaGroup.add(uPole, uTop);
 umbrellaGroup.position.set(5.5, getTerrainHeight(5.5, 155), 155);
 scene.add(umbrellaGroup);
+
+// Coastal Sea Stacks framing the ocean horizon
+[[-19, 174, 3.8], [21, 172, 4.2], [-28, 155, 3.2], [27, 152, 3.6], [-24, 134, 2.9], [25, 128, 3.1]].forEach(([sx, sz, sr]) => {
+  const stack = new THREE.Mesh(new THREE.DodecahedronGeometry(sr, 1), cozyMat(0x475569, 0.92, { bumpMap: terrainDetailTex, bumpScale: 0.3 }));
+  stack.scale.set(1.1, 1.9, 1.0);
+  stack.position.set(sx, sr * 0.4, sz);
+  stack.castShadow = true;
+  scene.add(stack);
+});
 
 const firePos = { x: -2.8, z: 157.5, y: getTerrainHeight(-2.8, 157.5) };
 for (let i = 0; i < 6; i++) {
@@ -707,9 +845,15 @@ for (let i = 0; i < 14; i++) {
   bonfireSparks.push({ mesh: sp, speed: 0.7 + Math.random() * 0.9, phase: Math.random() * 6 });
 }
 
+/* =========================================================
+   INSTANCED TERRAIN MICRO-DETAILS (Grass, Cliff Rocks, Flowers, Reeds, Bushes, Shells)
+========================================================= */
+const dummy = new THREE.Object3D();
+
+// A. 1,100+ Grass Blades
 const grassPositions = [];
-for (let i = 0; i < 1400; i++) {
-  const gx = (Math.random() - 0.5) * 76;
+for (let i = 0; i < 1500; i++) {
+  const gx = (Math.random() - 0.5) * 78;
   const gz = -22 + Math.random() * 130;
   const gy = getTerrainHeight(gx, gz);
   if (gy < 0.15) continue;
@@ -718,13 +862,10 @@ for (let i = 0; i < 1400; i++) {
   if (gz >= 40 && Math.abs(gx - mountainTrailX(gz)) < 3.8) continue;
   grassPositions.push({ x: gx, y: gy, z: gz });
 }
-
 const grassGeo = new THREE.ConeGeometry(0.14, 0.62, 4);
 grassGeo.translate(0, 0.31, 0);
 const grassMesh = new THREE.InstancedMesh(grassGeo, cozyMat(0xffffff, 0.9), grassPositions.length);
 grassMesh.receiveShadow = true;
-
-const dummy = new THREE.Object3D();
 const grassShades = [new THREE.Color(0x4d8b5c), new THREE.Color(0x3a7048), new THREE.Color(0x65a36c), new THREE.Color(0x7ca965)];
 grassPositions.forEach((p, idx) => {
   dummy.position.set(p.x, p.y - 0.04, p.z);
@@ -738,6 +879,127 @@ grassPositions.forEach((p, idx) => {
 grassMesh.instanceMatrix.needsUpdate = true;
 if (grassMesh.instanceColor) grassMesh.instanceColor.needsUpdate = true;
 scene.add(grassMesh);
+
+// B. 300 Colorful Wildflowers
+const flowerPos = [];
+for (let i = 0; i < 360; i++) {
+  const fx = (Math.random() - 0.5) * 68;
+  const fz = -20 + Math.random() * 126;
+  const fy = getTerrainHeight(fx, fz);
+  if (fy < 0.12) continue;
+  if (fz < 16 && Math.hypot(fx, fz + 4) < 9.2) continue;
+  if (fz < 18 && Math.abs(fx) < 3.0) continue;
+  if (fz >= 40 && Math.abs(fx - mountainTrailX(fz)) < 4.0) continue;
+  flowerPos.push({ x: fx, y: fy, z: fz });
+}
+const flowerGeo = new THREE.ConeGeometry(0.18, 0.26, 5);
+flowerGeo.rotateX(Math.PI);
+flowerGeo.translate(0, 0.26, 0);
+const flowerMesh = new THREE.InstancedMesh(flowerGeo, cozyMat(0xffffff, 0.7), flowerPos.length);
+const flowerPalette = [new THREE.Color(0xf472b6), new THREE.Color(0xfde047), new THREE.Color(0x38bdf8), new THREE.Color(0xfb7185)];
+flowerPos.forEach((p, idx) => {
+  dummy.position.set(p.x, p.y, p.z);
+  dummy.rotation.set(0, Math.random() * Math.PI, 0);
+  dummy.scale.setScalar(0.8 + Math.random() * 0.6);
+  dummy.updateMatrix();
+  flowerMesh.setMatrixAt(idx, dummy.matrix);
+  flowerMesh.setColorAt(idx, flowerPalette[idx % flowerPalette.length]);
+});
+flowerMesh.instanceMatrix.needsUpdate = true;
+if (flowerMesh.instanceColor) flowerMesh.instanceColor.needsUpdate = true;
+scene.add(flowerMesh);
+
+// C. 140 Jagged Mountain Cliff Boulders & Riverbank Rocks
+const rockPos = [];
+for (let i = 0; i < 140; i++) {
+  const rz = i < 25 ? (i % 2 === 0 ? 17.5 + Math.random() * 2 : 36.5 + Math.random() * 2) : 41 + Math.random() * 68;
+  const rx = (Math.random() - 0.5) * 72;
+  if (rz >= 40 && Math.abs(rx - mountainTrailX(rz)) < 4.5) continue;
+  if (rz < 40 && Math.abs(rx) < 3.8) continue;
+  if (Math.hypot(rx - 14.2, rz - 59) < 3.8) continue;
+  const ry = getTerrainHeight(rx, rz);
+  rockPos.push({ x: rx, y: ry, z: rz, sc: 0.7 + Math.random() * 1.9 });
+}
+const cliffRockGeo = new THREE.DodecahedronGeometry(0.8, 0);
+const cliffRockMesh = new THREE.InstancedMesh(cliffRockGeo, cozyMat(0x525866, 0.92, { bumpMap: terrainDetailTex, bumpScale: 0.2 }), rockPos.length);
+cliffRockMesh.castShadow = true;
+cliffRockMesh.receiveShadow = true;
+rockPos.forEach((p, idx) => {
+  dummy.position.set(p.x, p.y - 0.2, p.z);
+  dummy.rotation.set(Math.random() * 3, Math.random() * 3, Math.random() * 3);
+  dummy.scale.set(p.sc * 1.2, p.sc * 0.85, p.sc);
+  dummy.updateMatrix();
+  cliffRockMesh.setMatrixAt(idx, dummy.matrix);
+});
+cliffRockMesh.instanceMatrix.needsUpdate = true;
+scene.add(cliffRockMesh);
+
+// D. 90 Riverbank Reeds / Cattails (Z = 18..20 and 36..38)
+const reedPos = [];
+for (let i = 0; i < 90; i++) {
+  const rz = (i % 2 === 0 ? 18.2 : 37.5) + (Math.random() - 0.5) * 1.5;
+  const rx = (Math.random() - 0.5) * 44;
+  if (Math.abs(rx) < 3.2) continue;
+  reedPos.push({ x: rx, y: getTerrainHeight(rx, rz), z: rz });
+}
+const reedGeo = new THREE.CylinderGeometry(0.03, 0.05, 1.3, 5);
+reedGeo.translate(0, 0.65, 0);
+const reedMesh = new THREE.InstancedMesh(reedGeo, cozyMat(0x4d7c0f, 0.85), reedPos.length);
+reedPos.forEach((p, idx) => {
+  dummy.position.set(p.x, p.y - 0.1, p.z);
+  dummy.rotation.set((Math.random() - 0.5) * 0.25, 0, (Math.random() - 0.5) * 0.25);
+  dummy.scale.setScalar(0.8 + Math.random() * 0.5);
+  dummy.updateMatrix();
+  reedMesh.setMatrixAt(idx, dummy.matrix);
+});
+reedMesh.instanceMatrix.needsUpdate = true;
+scene.add(reedMesh);
+
+// E. 60 Cozy Bushes in Town & Foothills
+const bushPos = [];
+for (let i = 0; i < 65; i++) {
+  const bz = -20 + Math.random() * 64;
+  const bx = (Math.random() - 0.5) * 60;
+  if (bz < 16 && Math.hypot(bx, bz + 4) < 10.5) continue;
+  if (bz > 16 && bz < 40) continue;
+  if (Math.abs(bx) < 4.0) continue;
+  const by = getTerrainHeight(bx, bz);
+  if (by < 0.0) continue;
+  bushPos.push({ x: bx, y: by, z: bz });
+}
+const bushGeo = new THREE.DodecahedronGeometry(0.65, 1);
+const bushMesh = new THREE.InstancedMesh(bushGeo, cozyMat(0x2d6a4f, 0.9), bushPos.length);
+bushMesh.castShadow = true;
+bushMesh.receiveShadow = true;
+bushPos.forEach((p, idx) => {
+  dummy.position.set(p.x, p.y + 0.3, p.z);
+  dummy.rotation.set(0, Math.random() * Math.PI, 0);
+  const sc = 0.75 + Math.random() * 0.7;
+  dummy.scale.set(sc * 1.2, sc * 0.8, sc);
+  dummy.updateMatrix();
+  bushMesh.setMatrixAt(idx, dummy.matrix);
+});
+bushMesh.instanceMatrix.needsUpdate = true;
+scene.add(bushMesh);
+
+// F. 70 Beach Shells & Starfish along Sunset Beach (Z = 152..163)
+const shellGeo = new THREE.ConeGeometry(0.14, 0.18, 5);
+const shellMesh = new THREE.InstancedMesh(shellGeo, cozyMat(0xffffff, 0.65), 70);
+const shellPal = [new THREE.Color(0xfef3c7), new THREE.Color(0xfda4af), new THREE.Color(0xfdba74)];
+for (let i = 0; i < 70; i++) {
+  const sx = (Math.random() - 0.5) * 44;
+  const sz = 152 + Math.random() * 11;
+  const sy = getTerrainHeight(sx, sz);
+  dummy.position.set(sx, sy + 0.05, sz);
+  dummy.rotation.set(Math.PI / 2, Math.random() * Math.PI * 2, 0);
+  dummy.scale.setScalar(0.7 + Math.random() * 0.8);
+  dummy.updateMatrix();
+  shellMesh.setMatrixAt(i, dummy.matrix);
+  shellMesh.setColorAt(i, shellPal[i % shellPal.length]);
+}
+shellMesh.instanceMatrix.needsUpdate = true;
+if (shellMesh.instanceColor) shellMesh.instanceColor.needsUpdate = true;
+scene.add(shellMesh);
 
 const dustCount = 160;
 const dustGeo = new THREE.BufferGeometry();
@@ -754,11 +1016,11 @@ const dustSystem = new THREE.Points(
 );
 scene.add(dustSystem);
 
-/* 9. Articulated Human Character Rig (Pelvis Pivot for Natural Leaning, Swimming, Jumping & Sitting) */
+/* 9. Articulated Human Character Rig */
 function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x1c1917, skin = 0xffe0c4, scarf = 0xf43f5e, isFemale = false }) {
   const g = new THREE.Group();
   const bodyPivot = new THREE.Group();
-  bodyPivot.position.set(0, 0.82, 0); // Center of mass at pelvis!
+  bodyPivot.position.set(0, 0.82, 0);
   g.add(bodyPivot);
 
   const skinMat = cozyMat(skin, 0.72);
@@ -767,7 +1029,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   const shoeMat = cozyMat(0x27272a, 0.7);
   const hairMat = cozyMat(hairColor, 0.82);
 
-  // 1. Jointed Legs (Hip -> Thigh -> Knee -> Shin -> Sneaker)
   const thighGeo = new THREE.CapsuleGeometry(0.086, 0.24, 6, 12);
   thighGeo.translate(0, -0.20, 0);
   const shinGeo = new THREE.CapsuleGeometry(0.072, 0.23, 6, 12);
@@ -804,7 +1065,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   const right = makeLeg(0.125);
   bodyPivot.add(left.hipGroup, right.hipGroup);
 
-  // 2. Sculpted Human Torso via LatheGeometry
   const profile = isFemale
     ? [
         new THREE.Vector2(0.01, 0.64),
@@ -838,7 +1098,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   scarfTail.rotation.x = 0.16;
   bodyPivot.add(scarfRing, scarfTail);
 
-  // 3. Jointed Arms (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
   const upperArmGeo = new THREE.CapsuleGeometry(0.062, 0.19, 6, 10);
   upperArmGeo.translate(0, -0.12, 0);
   const forearmGeo = new THREE.CapsuleGeometry(0.055, 0.18, 6, 10);
@@ -871,7 +1130,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   const rightArm = makeArm(isFemale ? 0.24 : 0.27);
   bodyPivot.add(leftArm.shoulderGroup, rightArm.shoulderGroup);
 
-  // 4. Neck, Human Head, Ears & Face
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.082, 0.16, 12), skinMat);
   neck.position.set(0, 0.62, 0);
   bodyPivot.add(neck);
@@ -913,7 +1171,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   nose.position.set(0, -0.04, 0.225);
   headGroup.add(nose);
 
-  // 5. Sculpted Hair
   const scalp = new THREE.Mesh(
     new THREE.SphereGeometry(0.242, 22, 22, 0, Math.PI * 2, 0, Math.PI * 0.64),
     hairMat
@@ -997,7 +1254,6 @@ function setCharacterSitting(char, isSitting) {
   }
 }
 
-/* Smooth Human Pose Physics (Idle Breathing, Walk, Sprint, Mid-Air Jump, Land Squash, Swim) */
 function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwimming = false, landSquash = 0, bank = 0, dt = 0.016, time = 0, emitFootsteps = false }) {
   const u = char.userData;
   if (u.sitting) {
@@ -1008,7 +1264,6 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
   const lerp = (a, b, t) => a + (b - a) * Math.min(1, t);
   const k = dt * 12;
 
-  // Target values for every joint
   let bodyY = 0.82;
   let bodyPitch = 0;
   let bodyRoll = bank;
@@ -1021,14 +1276,11 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
   if (isSwimming) {
     const swimFactor = Math.min(1, speed / 3.5);
     u.walkCycle += dt * (4.5 + swimFactor * 5.0);
-
-    // Lean horizontally forward when swimming, stay upright treading water when idle
     bodyPitch = lerp(0.18, 1.12, swimFactor);
     bodyY = 0.82 + Math.sin(u.walkCycle) * 0.04;
-    headPitch = -bodyPitch * 0.68; // Keep head tilted up looking forward above water!
+    headPitch = -bodyPitch * 0.68;
 
     if (swimFactor > 0.15) {
-      // Freestyle / Breaststroke arm sweep + flutter kicks
       lShoX = -1.6 + Math.sin(u.walkCycle) * 0.9;
       rShoX = -1.6 + Math.sin(u.walkCycle + Math.PI) * 0.9;
       lShoZ = 0.35 + Math.cos(u.walkCycle) * 0.25;
@@ -1040,7 +1292,6 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
       lKnee = 0.25 + Math.max(0, -Math.sin(u.walkCycle * 1.6)) * 0.45;
       rKnee = 0.25 + Math.max(0, Math.sin(u.walkCycle * 1.6)) * 0.45;
     } else {
-      // Treading water calmly
       lShoZ = 0.45 + Math.sin(u.walkCycle) * 0.25;
       rShoZ = -0.45 - Math.sin(u.walkCycle) * 0.25;
       lElb = -0.5; rElb = -0.5;
@@ -1049,9 +1300,7 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
       lKnee = 0.6; rKnee = 0.6;
     }
     scarfPitch = 0.55;
-
   } else if (!grounded) {
-    // Mid-Air Jump / Fall Physics!
     const rising = velY > 1.2;
     bodyPitch = rising ? -0.1 : 0.14;
     headPitch = rising ? -0.1 : 0.1;
@@ -1065,10 +1314,8 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
     rShoZ = rising ? -0.28 : -0.52;
     lElb = -0.65; rElb = -0.65;
     scarfPitch = rising ? 0.85 : 1.1;
-
   } else if (speed > 0.35) {
-    // Ground Walk & Sprint Physics!
-    const runRatio = Math.max(0, Math.min(1, (speed - 5.2) / 4.0)); // 0 = walk, 1 = full sprint
+    const runRatio = Math.max(0, Math.min(1, (speed - 5.2) / 4.0));
     const strideFreq = 7.5 + runRatio * 5.2;
     u.walkCycle += dt * strideFreq;
 
@@ -1076,7 +1323,7 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
     const armAmp = 0.42 + runRatio * 0.55;
     const sinC = Math.sin(u.walkCycle);
 
-    bodyPitch = 0.05 + runRatio * 0.22; // Athletic forward sprint lean!
+    bodyPitch = 0.05 + runRatio * 0.22;
     bodyY = 0.82 + Math.abs(sinC) * (0.035 + runRatio * 0.055) - landSquash * 0.18;
     headPitch = -bodyPitch * 0.45;
 
@@ -1087,11 +1334,10 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
 
     lShoX = -sinC * armAmp;
     rShoX = sinC * armAmp;
-    lElb = -0.35 - runRatio * 0.92; // Elbows bend sharply when sprinting!
+    lElb = -0.35 - runRatio * 0.92;
     rElb = -0.35 - runRatio * 0.92;
     scarfPitch = 0.22 + runRatio * 0.55 + Math.sin(u.walkCycle * 2) * 0.08;
 
-    // Footstep sound & dust puff sync on stride peak
     if (emitFootsteps) {
       const half = Math.floor(u.walkCycle / Math.PI);
       if (half !== state.lastStepHalf) {
@@ -1103,7 +1349,6 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
       }
     }
   } else {
-    // Idle Breathing & Landing Recovery
     const breath = Math.sin(time * 2.1 + u.idlePhase);
     bodyY = 0.82 + breath * 0.015 - landSquash * 0.22;
     bodyPitch = landSquash * 0.25;
@@ -1116,7 +1361,6 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
     rShoZ = -0.08 - breath * 0.02;
   }
 
-  // Smoothly blend all joints
   u.bodyPivot.position.y = lerp(u.bodyPivot.position.y, bodyY, k);
   u.bodyPivot.rotation.x = lerp(u.bodyPivot.rotation.x, bodyPitch, k);
   u.bodyPivot.rotation.z = lerp(u.bodyPivot.rotation.z, bodyRoll, k);
@@ -1136,7 +1380,6 @@ function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwi
   u.scarfTail.rotation.x = lerp(u.scarfTail.rotation.x, scarfPitch, k);
 }
 
-// Main Story Cast
 const eric = createHumanCharacter({ topColor: 0x3b82f6, bottomColor: 0x1e293b, hairColor: 0x1c1917, scarf: 0xfbbf24, isFemale: false });
 eric.position.set(-1.3, 0, -4);
 eric.rotation.y = Math.PI / 2;
@@ -1346,7 +1589,7 @@ function beginOpeningQuarrel() {
 
 function finishJaneLeaving() {
   const beachZ = 158;
-  const beachY = getTerrainHeight(0, beachZ);
+  const beachY = getTerrainHeight(-0.45, beachZ);
   jane.position.set(-0.45, beachY - 0.52, beachZ);
   jane.rotation.y = 0;
   setCharacterSitting(jane, true);
@@ -1688,7 +1931,6 @@ function animate() {
     if (sp.mesh.position.y > firePos.y + 3.2) sp.mesh.position.y = firePos.y + 0.4;
   });
 
-  // Animate Villagers & Sora
   animateHumanPhysics(sora, { speed: 0, grounded: true, dt, time: elapsed });
   villagers.forEach((v) => {
     if (v.type === "orbit") {
@@ -1770,7 +2012,6 @@ function animate() {
     animateHumanPhysics(jane, { speed: 0, grounded: true, dt, time: elapsed });
   }
 
-  // Player Movement & Human Physics
   state.landSquash = Math.max(0, state.landSquash - dt * 4.5);
 
   if (state.phase === "EXPLORE" && !state.dialogueActive) {
@@ -1846,7 +2087,6 @@ function animate() {
     stamEl.style.background = state.stamina < 25 ? "#ef4444" : state.stamina < 55 ? "#eab308" : "#22c55e";
     document.getElementById("staminaState").textContent = inWater ? "Swimming" : wantsSprint && isMovingInput ? "Sprinting" : "Ready";
 
-    // Momentum & Smooth Acceleration / Drag
     let targetVx = 0, targetVz = 0;
     if (isMovingInput) {
       const len = Math.hypot(fwd, side);
@@ -1874,7 +2114,6 @@ function animate() {
     state.vx += (targetVx - state.vx) * Math.min(1, rate * dt);
     state.vz += (targetVz - state.vz) * Math.min(1, rate * dt);
 
-    // Environmental forces (Wind & Water Currents)
     let envVx = state.windForceX;
     if (inWater && pz >= 18 && pz <= 39) envVx += 2.2;
     if (inWater && pz > 112 && pz <= 150) envVx += Math.sin(elapsed * 0.9) * 1.1;
@@ -1886,12 +2125,11 @@ function animate() {
     if (canMoveTo(eric.position.x, nz, eric.position.y)) eric.position.z = nz;
     else state.vz = 0;
 
-    // Vertical Gravity, Buoyancy & Landing Impact
     const wasGrounded = state.grounded;
     const floorY = getSupportHeight(eric.position.x, eric.position.z, eric.position.y);
     if (state.isSwimming) {
       const horizSpeed = Math.hypot(state.vx, state.vz);
-      const swimDepth = horizSpeed > 1.2 ? 0.88 : 1.18; // Lower upright treading vs higher horizontal swimming!
+      const swimDepth = horizSpeed > 1.2 ? 0.88 : 1.18;
       const waveY = getWaterHeight(eric.position.x, eric.position.z, elapsed);
       eric.position.y += (waveY - swimDepth - eric.position.y) * dt * 6;
       state.velY = 0;
