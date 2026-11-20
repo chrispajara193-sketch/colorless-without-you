@@ -1,6 +1,6 @@
 /* =========================================================
-   FINDING JANE — Humanoid Chibi-Anime Diorama Edition
-   Sculpted Human Characters + Bustling Town + Water Physics + Beach
+   FINDING JANE — Humanoid Physics & Chibi Diorama Edition
+   Walk/Run Momentum + Jump/Land Squash + Horizontal Swim Physics
 ========================================================= */
 
 const SEA_LEVEL = -0.25;
@@ -27,7 +27,7 @@ const AudioEngine = (() => {
     osc.type = type;
     osc.frequency.setValueAtTime(freq, ctx.currentTime + delay);
     gain.gain.setValueAtTime(0.001, ctx.currentTime + delay);
-    gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + delay + 0.02);
+    gain.gain.linearRampToValueAtTime(vol, ctx.currentTime + delay + 0.015);
     gain.gain.exponentialRampToValueAtTime(0.0008, ctx.currentTime + delay + dur);
     osc.connect(gain);
     gain.connect(ctx.destination);
@@ -39,7 +39,9 @@ const AudioEngine = (() => {
     unlock: init,
     toggleMute() { muted = !muted; return muted; },
     blip: () => playTone(560, 0.07, "triangle", 0.04),
-    jump: () => playTone(340, 0.12, "sine", 0.05),
+    step: () => playTone(105, 0.045, "triangle", 0.022),
+    jump: () => playTone(320, 0.12, "sine", 0.045),
+    land: () => playTone(90, 0.09, "sine", 0.045),
     splash: () => { playTone(185, 0.16, "triangle", 0.06); playTone(125, 0.2, "sine", 0.05, 0.05); },
     hit: () => { playTone(130, 0.18, "sawtooth", 0.07); playTone(85, 0.22, "sawtooth", 0.06, 0.06); },
     colorDrain: () => [440, 392, 330, 247].forEach((f, i) => playTone(f, 0.45, "sine", 0.06, i * 0.22)),
@@ -62,10 +64,16 @@ const state = {
   hasLocket: false,
   gateUnlocked: false,
   stamina: 100,
+  vx: 0,
+  vz: 0,
   velY: 0,
+  facingYaw: Math.PI / 2,
+  bankAngle: 0,
+  landSquash: 0,
   grounded: true,
   isSwimming: false,
   rippleTimer: 0,
+  lastStepHalf: 0,
   lastSafePos: { x: 0, y: 0, z: 14 },
   windForceX: 0,
   windTimer: 0,
@@ -340,9 +348,10 @@ const waterMesh = new THREE.Mesh(
 waterMesh.receiveShadow = true;
 scene.add(waterMesh);
 
-/* 7. Water Physics Visuals */
+/* 7. Water & Footstep Dust Particle Visuals */
 const waterRipples = [];
 const waterSplashes = [];
+const dustPuffs = [];
 const riverFoamStreaks = [];
 
 function spawnRipple(x, z, maxScale = 2.6) {
@@ -370,6 +379,25 @@ function spawnSplash(x, z, count = 10) {
       vy: 2.8 + Math.random() * 2.5,
       vz: (Math.random() - 0.5) * 3.5,
       life: 0.55
+    });
+  }
+}
+
+function spawnDustPuff(x, y, z, count = 4) {
+  for (let i = 0; i < count; i++) {
+    const puff = new THREE.Mesh(
+      new THREE.SphereGeometry(0.11 + Math.random() * 0.08, 6, 6),
+      new THREE.MeshBasicMaterial({ color: 0xe7d8c3, transparent: true, opacity: 0.6 })
+    );
+    puff.position.set(x + (Math.random() - 0.5) * 0.4, y + 0.12, z + (Math.random() - 0.5) * 0.4);
+    scene.add(puff);
+    dustPuffs.push({
+      mesh: puff,
+      vx: (Math.random() - 0.5) * 1.4,
+      vy: 0.6 + Math.random() * 0.9,
+      vz: (Math.random() - 0.5) * 1.4,
+      life: 0.42,
+      maxLife: 0.42
     });
   }
 }
@@ -531,7 +559,6 @@ function createPalmTree(x, z) {
   colliders.push({ x, z, r: 0.7 });
 }
 
-// Town Buildings, Benches, Stalls & Lanterns
 createDioramaCottage(-15, -13, 0xd6b89c, 0x9f1239, 0.45);
 createDioramaCottage(15, -13, 0xcbd5e1, 0x3730a3, -0.45);
 createDioramaCottage(-16, -2, 0xe7d4c0, 0xbe123c, 1.25, 5.2, 4.0, 4.4);
@@ -576,7 +603,6 @@ bakery.rotation.y = -Math.PI / 3;
 scene.add(bakery);
 colliders.push({ x: 9.5, z: -4.5, r: 2.0 });
 
-// Walkable Broken Bridge Piers
 [18, 38].forEach((bz) => {
   const pier = new THREE.Mesh(new THREE.BoxGeometry(4.4, 0.6, 2.4), cozyMat(0x78350f, 0.9, { map: woodTex }));
   pier.position.set(0, 0.2, bz);
@@ -616,7 +642,6 @@ const summitLight = new THREE.PointLight(0xfbbf24, 1.4, 18);
 summitLight.position.set(0, summitY + 4, 76);
 scene.add(summitLight);
 
-// Mountain Forest (38 trees)
 for (let i = 0; i < 38; i++) {
   const mz = 43 + (i / 38) * 65;
   const side = i % 2 === 0 ? 1 : -1;
@@ -631,7 +656,6 @@ for (let i = 0; i < 38; i++) {
   createStylizedTree(x, z, t)
 );
 
-// Beach Props
 createPalmTree(-12, 155);
 createPalmTree(13, 156);
 createPalmTree(-17, 159);
@@ -683,7 +707,6 @@ for (let i = 0; i < 14; i++) {
   bonfireSparks.push({ mesh: sp, speed: 0.7 + Math.random() * 0.9, phase: Math.random() * 6 });
 }
 
-// Instanced Grass
 const grassPositions = [];
 for (let i = 0; i < 1400; i++) {
   const gx = (Math.random() - 0.5) * 76;
@@ -731,9 +754,13 @@ const dustSystem = new THREE.Points(
 );
 scene.add(dustSystem);
 
-/* 9. Articulated 3D Human Character Builder (Lathe Torso, Jointed Limbs, Sculpted Hair) */
+/* 9. Articulated Human Character Rig (Pelvis Pivot for Natural Leaning, Swimming, Jumping & Sitting) */
 function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x1c1917, skin = 0xffe0c4, scarf = 0xf43f5e, isFemale = false }) {
   const g = new THREE.Group();
+  const bodyPivot = new THREE.Group();
+  bodyPivot.position.set(0, 0.82, 0); // Center of mass at pelvis!
+  g.add(bodyPivot);
+
   const skinMat = cozyMat(skin, 0.72);
   const topMat = cozyMat(topColor, 0.76);
   const pantMat = cozyMat(bottomColor, 0.85);
@@ -750,7 +777,7 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
 
   function makeLeg(sideX) {
     const hipGroup = new THREE.Group();
-    hipGroup.position.set(sideX, 0.82, 0);
+    hipGroup.position.set(sideX, 0, 0);
 
     const thigh = new THREE.Mesh(thighGeo, isFemale ? skinMat : pantMat);
     thigh.castShadow = true;
@@ -775,42 +802,41 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
 
   const left = makeLeg(-0.125);
   const right = makeLeg(0.125);
-  g.add(left.hipGroup, right.hipGroup);
+  bodyPivot.add(left.hipGroup, right.hipGroup);
 
-  // 2. Sculpted Human Torso via LatheGeometry (Waist, Chest, Shoulders, Coat/Skirt)
+  // 2. Sculpted Human Torso via LatheGeometry
   const profile = isFemale
     ? [
         new THREE.Vector2(0.01, 0.64),
         new THREE.Vector2(0.28, 0.66),
         new THREE.Vector2(0.22, 0.86),
-        new THREE.Vector2(0.16, 1.03), // Fitted waist
-        new THREE.Vector2(0.21, 1.22), // Chest
-        new THREE.Vector2(0.19, 1.35), // Shoulders
-        new THREE.Vector2(0.08, 1.39)  // Collar
+        new THREE.Vector2(0.16, 1.03),
+        new THREE.Vector2(0.21, 1.22),
+        new THREE.Vector2(0.19, 1.35),
+        new THREE.Vector2(0.08, 1.39)
       ]
     : [
         new THREE.Vector2(0.01, 0.76),
         new THREE.Vector2(0.22, 0.78),
-        new THREE.Vector2(0.19, 0.96), // Waist
-        new THREE.Vector2(0.24, 1.24), // Chest / Shoulders
+        new THREE.Vector2(0.19, 0.96),
+        new THREE.Vector2(0.24, 1.24),
         new THREE.Vector2(0.22, 1.36),
-        new THREE.Vector2(0.09, 1.40)  // Collar
+        new THREE.Vector2(0.09, 1.40)
       ];
 
-  const torsoGeo = new THREE.LatheGeometry(profile, 18);
-  const torso = new THREE.Mesh(torsoGeo, topMat);
-  torso.scale.set(1.08, 1, 0.75); // Natural human oval cross-section!
+  const torso = new THREE.Mesh(new THREE.LatheGeometry(profile, 18), topMat);
+  torso.position.y = -0.82;
+  torso.scale.set(1.08, 1, 0.75);
   torso.castShadow = true;
-  g.add(torso);
+  bodyPivot.add(torso);
 
-  // Cozy Scarf + Back Tail
   const scarfRing = new THREE.Mesh(new THREE.TorusGeometry(0.14, 0.05, 8, 18), cozyMat(scarf, 0.8));
   scarfRing.rotation.x = Math.PI / 2;
-  scarfRing.position.set(0, 1.39, 0.01);
+  scarfRing.position.set(0, 0.57, 0.01);
   const scarfTail = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.34, 0.04), cozyMat(scarf, 0.8));
-  scarfTail.position.set(0.06, 1.22, -0.17);
+  scarfTail.position.set(0.06, 0.40, -0.17);
   scarfTail.rotation.x = 0.16;
-  g.add(scarfRing, scarfTail);
+  bodyPivot.add(scarfRing, scarfTail);
 
   // 3. Jointed Arms (Shoulder -> Upper Arm -> Elbow -> Forearm -> Hand)
   const upperArmGeo = new THREE.CapsuleGeometry(0.062, 0.19, 6, 10);
@@ -820,7 +846,7 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
 
   function makeArm(sideX) {
     const shoulderGroup = new THREE.Group();
-    shoulderGroup.position.set(sideX, 1.31, 0);
+    shoulderGroup.position.set(sideX, 0.49, 0);
 
     const shoulderCap = new THREE.Mesh(new THREE.SphereGeometry(0.072, 10, 10), topMat);
     const upperArm = new THREE.Mesh(upperArmGeo, topMat);
@@ -843,22 +869,21 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
 
   const leftArm = makeArm(isFemale ? -0.24 : -0.27);
   const rightArm = makeArm(isFemale ? 0.24 : 0.27);
-  g.add(leftArm.shoulderGroup, rightArm.shoulderGroup);
+  bodyPivot.add(leftArm.shoulderGroup, rightArm.shoulderGroup);
 
   // 4. Neck, Human Head, Ears & Face
   const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.082, 0.16, 12), skinMat);
-  neck.position.set(0, 1.44, 0);
-  g.add(neck);
+  neck.position.set(0, 0.62, 0);
+  bodyPivot.add(neck);
 
   const headGroup = new THREE.Group();
-  headGroup.position.set(0, 1.66, 0);
+  headGroup.position.set(0, 0.84, 0);
 
   const head = new THREE.Mesh(new THREE.SphereGeometry(0.23, 24, 24), skinMat);
   head.scale.set(0.93, 1.07, 0.96);
   head.castShadow = true;
   headGroup.add(head);
 
-  // Ears
   [-0.21, 0.21].forEach((ex) => {
     const ear = new THREE.Mesh(new THREE.SphereGeometry(0.046, 10, 10), skinMat);
     ear.scale.set(0.55, 1.0, 0.8);
@@ -866,7 +891,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
     headGroup.add(ear);
   });
 
-  // Expressive Anime Eyes + Eyebrows + Tiny Nose + Blush
   [-0.085, 0.085].forEach((ex) => {
     const iris = new THREE.Mesh(new THREE.SphereGeometry(0.036, 10, 10), new THREE.MeshBasicMaterial({ color: 0x1e1b4b }));
     iris.scale.set(0.85, 1.25, 0.45);
@@ -889,18 +913,17 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   nose.position.set(0, -0.04, 0.225);
   headGroup.add(nose);
 
-  // 5. Sculpted Anime Hair (Short Layered vs Flowing Long Hair)
+  // 5. Sculpted Hair
   const scalp = new THREE.Mesh(
     new THREE.SphereGeometry(0.242, 22, 22, 0, Math.PI * 2, 0, Math.PI * 0.64),
     hairMat
   );
   scalp.scale.set(0.96, 1.05, 1.0);
-  scalp.rotation.x = -0.35; // Covers top and back of skull cleanly
+  scalp.rotation.x = -0.35;
   scalp.position.set(0, 0.015, -0.015);
   scalp.castShadow = true;
   headGroup.add(scalp);
 
-  // Front Bangs Locks
   [-0.12, -0.05, 0.02, 0.09, 0.14].forEach((bx, idx) => {
     const bang = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.16, 6), hairMat);
     bang.position.set(bx, 0.13, 0.18 - Math.abs(bx) * 0.3);
@@ -909,7 +932,6 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
   });
 
   if (isFemale) {
-    // Flowing Back Hair + Side Locks
     const backCurtain = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.36, 8, 14), hairMat);
     backCurtain.scale.set(1.18, 1.0, 0.55);
     backCurtain.position.set(0, -0.18, -0.14);
@@ -923,12 +945,10 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
       headGroup.add(sideLock);
     });
 
-    // Cute Hair Ribbon on Back
     const ribbonTie = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.018, 6, 12), cozyMat(scarf, 0.7));
     ribbonTie.position.set(0, -0.02, -0.23);
     headGroup.add(ribbonTie);
   } else {
-    // Short Tousled Male Hair at Back of Neck
     [-0.1, -0.03, 0.04, 0.1].forEach((nx, idx) => {
       const lock = new THREE.Mesh(new THREE.ConeGeometry(0.065, 0.18, 6), hairMat);
       lock.position.set(nx, -0.08, -0.19);
@@ -937,9 +957,11 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
     });
   }
 
-  g.add(headGroup);
+  bodyPivot.add(headGroup);
 
   g.userData = {
+    bodyPivot,
+    scarfTail,
     leftHip: left.hipGroup,
     rightHip: right.hipGroup,
     leftKnee: left.kneeGroup,
@@ -950,6 +972,7 @@ function createHumanCharacter({ topColor, bottomColor = 0x1e293b, hairColor = 0x
     rightElbow: rightArm.elbowGroup,
     headGroup,
     walkCycle: 0,
+    idlePhase: Math.random() * 6,
     sitting: false
   };
   scene.add(g);
@@ -960,46 +983,157 @@ function setCharacterSitting(char, isSitting) {
   const u = char.userData;
   u.sitting = isSitting;
   if (isSitting) {
+    u.bodyPivot.position.y = 0.82;
+    u.bodyPivot.rotation.set(-0.08, 0, 0);
+    u.headGroup.rotation.set(-0.06, 0, 0);
     u.leftHip.rotation.x = -Math.PI / 2.15;
     u.rightHip.rotation.x = -Math.PI / 2.15;
     u.leftKnee.rotation.x = Math.PI / 2.3;
     u.rightKnee.rotation.x = Math.PI / 2.3;
-    u.leftShoulder.rotation.x = -0.35;
-    u.rightShoulder.rotation.x = -0.35;
+    u.leftShoulder.rotation.set(-0.35, 0, 0.08);
+    u.rightShoulder.rotation.set(-0.35, 0, -0.08);
     u.leftElbow.rotation.x = -0.5;
     u.rightElbow.rotation.x = -0.5;
   }
 }
 
-function animateCharacterPose(char, isMoving, isSwimming, dt) {
+/* Smooth Human Pose Physics (Idle Breathing, Walk, Sprint, Mid-Air Jump, Land Squash, Swim) */
+function animateHumanPhysics(char, { speed = 0, grounded = true, velY = 0, isSwimming = false, landSquash = 0, bank = 0, dt = 0.016, time = 0, emitFootsteps = false }) {
   const u = char.userData;
-  if (u.sitting) return;
+  if (u.sitting) {
+    u.headGroup.rotation.x = -0.06 + Math.sin(time * 1.6 + u.idlePhase) * 0.025;
+    return;
+  }
+
+  const lerp = (a, b, t) => a + (b - a) * Math.min(1, t);
+  const k = dt * 12;
+
+  // Target values for every joint
+  let bodyY = 0.82;
+  let bodyPitch = 0;
+  let bodyRoll = bank;
+  let headPitch = 0;
+  let lHip = 0, rHip = 0, lKnee = 0, rKnee = 0;
+  let lShoX = 0, rShoX = 0, lShoZ = 0.08, rShoZ = -0.08;
+  let lElb = -0.18, rElb = -0.18;
+  let scarfPitch = 0.16;
 
   if (isSwimming) {
-    u.walkCycle += dt * 7;
-    u.leftShoulder.rotation.x = -Math.PI / 2 + Math.sin(u.walkCycle) * 0.7;
-    u.rightShoulder.rotation.x = -Math.PI / 2 + Math.cos(u.walkCycle) * 0.7;
-    u.leftHip.rotation.x = Math.sin(u.walkCycle * 1.4) * 0.45;
-    u.rightHip.rotation.x = -Math.sin(u.walkCycle * 1.4) * 0.45;
-    u.leftKnee.rotation.x = 0.25;
-    u.rightKnee.rotation.x = 0.25;
-  } else if (isMoving) {
-    u.walkCycle += dt * 10.5;
-    const s = Math.sin(u.walkCycle) * 0.55;
-    u.leftHip.rotation.x = s;
-    u.rightHip.rotation.x = -s;
-    u.leftKnee.rotation.x = Math.max(0, -s * 0.75);
-    u.rightKnee.rotation.x = Math.max(0, s * 0.75);
-    u.leftShoulder.rotation.x = -s * 0.65;
-    u.rightShoulder.rotation.x = s * 0.65;
+    const swimFactor = Math.min(1, speed / 3.5);
+    u.walkCycle += dt * (4.5 + swimFactor * 5.0);
+
+    // Lean horizontally forward when swimming, stay upright treading water when idle
+    bodyPitch = lerp(0.18, 1.12, swimFactor);
+    bodyY = 0.82 + Math.sin(u.walkCycle) * 0.04;
+    headPitch = -bodyPitch * 0.68; // Keep head tilted up looking forward above water!
+
+    if (swimFactor > 0.15) {
+      // Freestyle / Breaststroke arm sweep + flutter kicks
+      lShoX = -1.6 + Math.sin(u.walkCycle) * 0.9;
+      rShoX = -1.6 + Math.sin(u.walkCycle + Math.PI) * 0.9;
+      lShoZ = 0.35 + Math.cos(u.walkCycle) * 0.25;
+      rShoZ = -0.35 - Math.cos(u.walkCycle + Math.PI) * 0.25;
+      lElb = -0.45 - Math.max(0, Math.sin(u.walkCycle)) * 0.6;
+      rElb = -0.45 - Math.max(0, Math.sin(u.walkCycle + Math.PI)) * 0.6;
+      lHip = Math.sin(u.walkCycle * 1.6) * 0.55;
+      rHip = -Math.sin(u.walkCycle * 1.6) * 0.55;
+      lKnee = 0.25 + Math.max(0, -Math.sin(u.walkCycle * 1.6)) * 0.45;
+      rKnee = 0.25 + Math.max(0, Math.sin(u.walkCycle * 1.6)) * 0.45;
+    } else {
+      // Treading water calmly
+      lShoZ = 0.45 + Math.sin(u.walkCycle) * 0.25;
+      rShoZ = -0.45 - Math.sin(u.walkCycle) * 0.25;
+      lElb = -0.5; rElb = -0.5;
+      lHip = -0.3 + Math.sin(u.walkCycle) * 0.3;
+      rHip = -0.3 - Math.sin(u.walkCycle) * 0.3;
+      lKnee = 0.6; rKnee = 0.6;
+    }
+    scarfPitch = 0.55;
+
+  } else if (!grounded) {
+    // Mid-Air Jump / Fall Physics!
+    const rising = velY > 1.2;
+    bodyPitch = rising ? -0.1 : 0.14;
+    headPitch = rising ? -0.1 : 0.1;
+    lHip = rising ? -0.82 : -0.45;
+    lKnee = rising ? 1.2 : 0.65;
+    rHip = rising ? 0.28 : -0.22;
+    rKnee = rising ? 0.38 : 0.45;
+    lShoX = rising ? -1.15 : -0.55;
+    rShoX = rising ? -0.75 : -0.55;
+    lShoZ = rising ? 0.28 : 0.52;
+    rShoZ = rising ? -0.28 : -0.52;
+    lElb = -0.65; rElb = -0.65;
+    scarfPitch = rising ? 0.85 : 1.1;
+
+  } else if (speed > 0.35) {
+    // Ground Walk & Sprint Physics!
+    const runRatio = Math.max(0, Math.min(1, (speed - 5.2) / 4.0)); // 0 = walk, 1 = full sprint
+    const strideFreq = 7.5 + runRatio * 5.2;
+    u.walkCycle += dt * strideFreq;
+
+    const hipAmp = 0.48 + runRatio * 0.44;
+    const armAmp = 0.42 + runRatio * 0.55;
+    const sinC = Math.sin(u.walkCycle);
+
+    bodyPitch = 0.05 + runRatio * 0.22; // Athletic forward sprint lean!
+    bodyY = 0.82 + Math.abs(sinC) * (0.035 + runRatio * 0.055) - landSquash * 0.18;
+    headPitch = -bodyPitch * 0.45;
+
+    lHip = sinC * hipAmp + landSquash * 0.45;
+    rHip = -sinC * hipAmp + landSquash * 0.45;
+    lKnee = Math.max(0.08, -sinC * (0.65 + runRatio * 0.55)) + landSquash * 0.7;
+    rKnee = Math.max(0.08, sinC * (0.65 + runRatio * 0.55)) + landSquash * 0.7;
+
+    lShoX = -sinC * armAmp;
+    rShoX = sinC * armAmp;
+    lElb = -0.35 - runRatio * 0.92; // Elbows bend sharply when sprinting!
+    rElb = -0.35 - runRatio * 0.92;
+    scarfPitch = 0.22 + runRatio * 0.55 + Math.sin(u.walkCycle * 2) * 0.08;
+
+    // Footstep sound & dust puff sync on stride peak
+    if (emitFootsteps) {
+      const half = Math.floor(u.walkCycle / Math.PI);
+      if (half !== state.lastStepHalf) {
+        state.lastStepHalf = half;
+        AudioEngine.step();
+        if (runRatio > 0.35) {
+          spawnDustPuff(char.position.x, char.position.y, char.position.z, 2);
+        }
+      }
+    }
   } else {
-    u.leftHip.rotation.x *= 0.84;
-    u.rightHip.rotation.x *= 0.84;
-    u.leftKnee.rotation.x *= 0.84;
-    u.rightKnee.rotation.x *= 0.84;
-    u.leftShoulder.rotation.x *= 0.84;
-    u.rightShoulder.rotation.x *= 0.84;
+    // Idle Breathing & Landing Recovery
+    const breath = Math.sin(time * 2.1 + u.idlePhase);
+    bodyY = 0.82 + breath * 0.015 - landSquash * 0.22;
+    bodyPitch = landSquash * 0.25;
+    headPitch = breath * 0.025;
+    lHip = landSquash * 0.5;
+    rHip = landSquash * 0.5;
+    lKnee = landSquash * 0.85;
+    rKnee = landSquash * 0.85;
+    lShoZ = 0.08 + breath * 0.02;
+    rShoZ = -0.08 - breath * 0.02;
   }
+
+  // Smoothly blend all joints
+  u.bodyPivot.position.y = lerp(u.bodyPivot.position.y, bodyY, k);
+  u.bodyPivot.rotation.x = lerp(u.bodyPivot.rotation.x, bodyPitch, k);
+  u.bodyPivot.rotation.z = lerp(u.bodyPivot.rotation.z, bodyRoll, k);
+  u.headGroup.rotation.x = lerp(u.headGroup.rotation.x, headPitch, k);
+
+  u.leftHip.rotation.x = lerp(u.leftHip.rotation.x, lHip, k);
+  u.rightHip.rotation.x = lerp(u.rightHip.rotation.x, rHip, k);
+  u.leftKnee.rotation.x = lerp(u.leftKnee.rotation.x, lKnee, k);
+  u.rightKnee.rotation.x = lerp(u.rightKnee.rotation.x, rKnee, k);
+
+  u.leftShoulder.rotation.x = lerp(u.leftShoulder.rotation.x, lShoX, k);
+  u.rightShoulder.rotation.x = lerp(u.rightShoulder.rotation.x, rShoX, k);
+  u.leftShoulder.rotation.z = lerp(u.leftShoulder.rotation.z, lShoZ, k);
+  u.rightShoulder.rotation.z = lerp(u.rightShoulder.rotation.z, rShoZ, k);
+  u.leftElbow.rotation.x = lerp(u.leftElbow.rotation.x, lElb, k);
+  u.rightElbow.rotation.x = lerp(u.rightElbow.rotation.x, rElb, k);
+  u.scarfTail.rotation.x = lerp(u.scarfTail.rotation.x, scarfPitch, k);
 }
 
 // Main Story Cast
@@ -1015,7 +1149,6 @@ const sora = createHumanCharacter({ topColor: 0xfacc15, hairColor: 0x57361a, sca
 sora.position.set(-8.0, 0, -3.2);
 sora.rotation.y = Math.PI / 3;
 
-// Lively Townspeople
 const villagers = [
   { mesh: createHumanCharacter({ topColor: 0x10b981, hairColor: 0x292524, scarf: 0xfef3c7, isFemale: false }), type: "orbit", cx: 0, cz: -4, r: 6.4, angle: 0.4, speed: 0.35 },
   { mesh: createHumanCharacter({ topColor: 0x8b5cf6, hairColor: 0x451a03, scarf: 0x38bdf8, isFemale: true }), type: "orbit", cx: 0, cz: -4, r: 6.8, angle: 3.5, speed: -0.3 },
@@ -1031,7 +1164,7 @@ villagers.forEach((v) => {
   }
 });
 
-/* 10. Collectibles, Waypoint & Falling Meteors */
+/* 10. Collectibles, Waypoint & Meteors */
 const scarfItem = new THREE.Mesh(
   new THREE.TorusKnotGeometry(0.32, 0.09, 36, 8),
   new THREE.MeshBasicMaterial({ color: 0xf43f5e })
@@ -1393,6 +1526,20 @@ function findNearbyInteractable() {
   return null;
 }
 
+function triggerJump() {
+  if (state.phase !== "EXPLORE" || !(state.grounded || state.isSwimming)) return;
+  if (state.isSwimming) {
+    eric.position.y = Math.max(eric.position.y, SEA_LEVEL - 0.12);
+    state.isSwimming = false;
+    spawnSplash(eric.position.x, eric.position.z, 7);
+  } else {
+    spawnDustPuff(eric.position.x, eric.position.y, eric.position.z, 5);
+  }
+  state.velY = 9.8;
+  state.grounded = false;
+  AudioEngine.jump();
+}
+
 /* 15. Input Listeners */
 window.addEventListener("keydown", (e) => {
   AudioEngine.unlock();
@@ -1403,15 +1550,9 @@ window.addEventListener("keydown", (e) => {
     if (state.dialogueActive) {
       e.preventDefault();
       advanceDialogue();
-    } else if (e.key === " " && state.phase === "EXPLORE" && (state.grounded || state.isSwimming)) {
+    } else if (e.key === " ") {
       e.preventDefault();
-      if (state.isSwimming) {
-        eric.position.y = Math.max(eric.position.y, SEA_LEVEL - 0.12);
-        state.isSwimming = false;
-      }
-      state.velY = 9.8;
-      state.grounded = false;
-      AudioEngine.jump();
+      triggerJump();
     }
   }
   if (k === "e" && state.nearbyInteractable && !state.dialogueActive) {
@@ -1432,15 +1573,7 @@ document.getElementById("mobileActionBtn").addEventListener("click", () => {
 });
 document.getElementById("mobileJumpBtn").addEventListener("click", () => {
   AudioEngine.unlock();
-  if (state.phase === "EXPLORE" && (state.grounded || state.isSwimming)) {
-    if (state.isSwimming) {
-      eric.position.y = Math.max(eric.position.y, SEA_LEVEL - 0.12);
-      state.isSwimming = false;
-    }
-    state.velY = 9.8;
-    state.grounded = false;
-    AudioEngine.jump();
-  }
+  triggerJump();
 });
 
 document.querySelectorAll(".pad-btn").forEach((btn) => {
@@ -1482,6 +1615,12 @@ window.addEventListener("resize", () => {
 /* 16. Main Loop */
 const clock = new THREE.Clock();
 
+function lerpAngle(current, target, t) {
+  let diff = ((target - current + Math.PI) % (Math.PI * 2)) - Math.PI;
+  if (diff < -Math.PI) diff += Math.PI * 2;
+  return { angle: current + diff * Math.min(1, t), diff };
+}
+
 function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(clock.getDelta(), 0.05);
@@ -1506,10 +1645,8 @@ function animate() {
     const r = waterRipples[i];
     r.life += dt;
     const prog = r.life / r.maxLife;
-    if (prog >= 1) {
-      scene.remove(r.mesh);
-      waterRipples.splice(i, 1);
-    } else {
+    if (prog >= 1) { scene.remove(r.mesh); waterRipples.splice(i, 1); }
+    else {
       const sc = 1 + prog * r.maxScale;
       r.mesh.scale.set(sc, sc, 1);
       r.mesh.material.opacity = 0.72 * (1 - prog);
@@ -1518,15 +1655,21 @@ function animate() {
 
   for (let i = waterSplashes.length - 1; i >= 0; i--) {
     const s = waterSplashes[i];
-    s.life -= dt;
-    s.vy -= 12 * dt;
-    s.mesh.position.x += s.vx * dt;
-    s.mesh.position.y += s.vy * dt;
-    s.mesh.position.z += s.vz * dt;
-    if (s.life <= 0) {
-      scene.remove(s.mesh);
-      waterSplashes.splice(i, 1);
-    }
+    s.life -= dt; s.vy -= 12 * dt;
+    s.mesh.position.x += s.vx * dt; s.mesh.position.y += s.vy * dt; s.mesh.position.z += s.vz * dt;
+    if (s.life <= 0) { scene.remove(s.mesh); waterSplashes.splice(i, 1); }
+  }
+
+  for (let i = dustPuffs.length - 1; i >= 0; i--) {
+    const d = dustPuffs[i];
+    d.life -= dt;
+    d.mesh.position.x += d.vx * dt;
+    d.mesh.position.y += d.vy * dt;
+    d.mesh.position.z += d.vz * dt;
+    const p = 1 - d.life / d.maxLife;
+    d.mesh.scale.setScalar(1 + p * 1.4);
+    d.mesh.material.opacity = 0.6 * (1 - p);
+    if (d.life <= 0) { scene.remove(d.mesh); dustPuffs.splice(i, 1); }
   }
 
   chimneySmokes.forEach((cs) => {
@@ -1536,10 +1679,7 @@ function animate() {
     cs.mesh.material.opacity = 0.45 * (1 - cycle);
   });
 
-  palmTops.forEach((pt, idx) => {
-    pt.rotation.z = Math.sin(elapsed * 1.6 + idx) * 0.06;
-  });
-
+  palmTops.forEach((pt, idx) => { pt.rotation.z = Math.sin(elapsed * 1.6 + idx) * 0.06; });
   flame.scale.set(1 + Math.sin(elapsed * 12) * 0.12, 1 + Math.cos(elapsed * 14) * 0.16, 1);
   beachFireLight.intensity = 1.6 + Math.sin(elapsed * 10) * 0.35;
   bonfireSparks.forEach((sp) => {
@@ -1548,6 +1688,8 @@ function animate() {
     if (sp.mesh.position.y > firePos.y + 3.2) sp.mesh.position.y = firePos.y + 0.4;
   });
 
+  // Animate Villagers & Sora
+  animateHumanPhysics(sora, { speed: 0, grounded: true, dt, time: elapsed });
   villagers.forEach((v) => {
     if (v.type === "orbit") {
       v.angle += v.speed * dt;
@@ -1557,7 +1699,7 @@ function animate() {
       const dz = nz - v.mesh.position.z;
       v.mesh.position.set(nx, getTerrainHeight(nx, nz), nz);
       v.mesh.rotation.y = Math.atan2(dx, dz);
-      animateCharacterPose(v.mesh, true, false, dt);
+      animateHumanPhysics(v.mesh, { speed: 3.8, grounded: true, dt, time: elapsed });
     } else if (v.type === "patrol") {
       v.t += v.dir * v.speed * dt;
       if (v.t >= 1) { v.t = 1; v.dir = -1; }
@@ -1568,7 +1710,9 @@ function animate() {
       const dz = (v.z2 - v.z1) * v.dir;
       v.mesh.position.set(nx, getTerrainHeight(nx, nz), nz);
       v.mesh.rotation.y = Math.atan2(dx, dz);
-      animateCharacterPose(v.mesh, true, false, dt);
+      animateHumanPhysics(v.mesh, { speed: 3.6, grounded: true, dt, time: elapsed });
+    } else {
+      animateHumanPhysics(v.mesh, { speed: 0, grounded: true, dt, time: elapsed });
     }
   });
 
@@ -1617,14 +1761,18 @@ function animate() {
     jane.position.x += (0 - jane.position.x) * dt * 1.6;
     jane.position.z += dt * 4.8;
     jane.rotation.y = 0;
-    animateCharacterPose(jane, true, false, dt);
+    animateHumanPhysics(jane, { speed: 4.8, grounded: true, dt, time: elapsed });
     if (jane.position.z >= 18.5) {
-      animateCharacterPose(jane, false, false, dt);
+      animateHumanPhysics(jane, { speed: 0, grounded: true, dt, time: elapsed });
       finishJaneLeaving();
     }
+  } else {
+    animateHumanPhysics(jane, { speed: 0, grounded: true, dt, time: elapsed });
   }
 
-  let playerMoving = false;
+  // Player Movement & Human Physics
+  state.landSquash = Math.max(0, state.landSquash - dt * 4.5);
+
   if (state.phase === "EXPLORE" && !state.dialogueActive) {
     if (state.keys["q"]) state.camYaw += dt * 2.0;
 
@@ -1679,6 +1827,7 @@ function animate() {
       if (state.stamina <= 0) {
         showAlert("Exhausted by the tide! Swept back to shore.", 2500);
         eric.position.set(state.lastSafePos.x, state.lastSafePos.y + 0.3, state.lastSafePos.z);
+        state.vx = 0; state.vz = 0;
         state.stamina = 45;
       }
       state.rippleTimer += dt;
@@ -1697,11 +1846,8 @@ function animate() {
     stamEl.style.background = state.stamina < 25 ? "#ef4444" : state.stamina < 55 ? "#eab308" : "#22c55e";
     document.getElementById("staminaState").textContent = inWater ? "Swimming" : wantsSprint && isMovingInput ? "Sprinting" : "Ready";
 
-    let moveX = state.windForceX * dt;
-    let moveZ = 0;
-    if (inWater && pz >= 18 && pz <= 39) moveX += 2.2 * dt;
-    if (inWater && pz > 112 && pz <= 150) moveX += Math.sin(elapsed * 0.9) * 1.1 * dt;
-
+    // Momentum & Smooth Acceleration / Drag
+    let targetVx = 0, targetVz = 0;
     if (isMovingInput) {
       const len = Math.hypot(fwd, side);
       fwd /= len; side /= len;
@@ -1709,22 +1855,45 @@ function animate() {
       const cosY = Math.cos(state.camYaw);
       const dirX = -sinY * fwd + cosY * side;
       const dirZ = -cosY * fwd - sinY * side;
-      const speed = inWater ? 4.4 : wantsSprint ? 9.4 : 6.0;
-      moveX += dirX * speed * dt;
-      moveZ += dirZ * speed * dt;
-      eric.rotation.y = Math.atan2(dirX, dirZ);
-      playerMoving = true;
+      const topSpeed = inWater ? 4.4 : wantsSprint ? 9.5 : 5.8;
+      targetVx = dirX * topSpeed;
+      targetVz = dirZ * topSpeed;
+
+      const targetYaw = Math.atan2(dirX, dirZ);
+      const turned = lerpAngle(state.facingYaw, targetYaw, dt * (inWater ? 6 : 12));
+      state.facingYaw = turned.angle;
+      state.bankAngle = Math.max(-0.18, Math.min(0.18, -turned.diff * 0.25));
+      eric.rotation.y = state.facingYaw;
+    } else {
+      state.bankAngle *= 0.85;
     }
 
-    const nx = eric.position.x + moveX;
-    const nz = eric.position.z + moveZ;
-    if (canMoveTo(nx, eric.position.z, eric.position.y)) eric.position.x = nx;
-    if (canMoveTo(eric.position.x, nz, eric.position.y)) eric.position.z = nz;
+    const accel = inWater ? 8.5 : state.grounded ? 26.0 : 11.0;
+    const drag = inWater ? 4.5 : state.grounded ? 15.0 : 2.5;
+    const rate = isMovingInput ? accel : drag;
+    state.vx += (targetVx - state.vx) * Math.min(1, rate * dt);
+    state.vz += (targetVz - state.vz) * Math.min(1, rate * dt);
 
+    // Environmental forces (Wind & Water Currents)
+    let envVx = state.windForceX;
+    if (inWater && pz >= 18 && pz <= 39) envVx += 2.2;
+    if (inWater && pz > 112 && pz <= 150) envVx += Math.sin(elapsed * 0.9) * 1.1;
+
+    const nx = eric.position.x + (state.vx + envVx) * dt;
+    const nz = eric.position.z + state.vz * dt;
+    if (canMoveTo(nx, eric.position.z, eric.position.y)) eric.position.x = nx;
+    else state.vx = 0;
+    if (canMoveTo(eric.position.x, nz, eric.position.y)) eric.position.z = nz;
+    else state.vz = 0;
+
+    // Vertical Gravity, Buoyancy & Landing Impact
+    const wasGrounded = state.grounded;
     const floorY = getSupportHeight(eric.position.x, eric.position.z, eric.position.y);
     if (state.isSwimming) {
+      const horizSpeed = Math.hypot(state.vx, state.vz);
+      const swimDepth = horizSpeed > 1.2 ? 0.88 : 1.18; // Lower upright treading vs higher horizontal swimming!
       const waveY = getWaterHeight(eric.position.x, eric.position.z, elapsed);
-      eric.position.y += (waveY - 0.72 - eric.position.y) * dt * 8;
+      eric.position.y += (waveY - swimDepth - eric.position.y) * dt * 6;
       state.velY = 0;
       state.grounded = false;
     } else if (eric.position.y < floorY - 0.15 && state.velY <= 0) {
@@ -1735,6 +1904,11 @@ function animate() {
       state.velY -= 24 * dt;
       eric.position.y += state.velY * dt;
       if (eric.position.y <= floorY) {
+        if (!wasGrounded && state.velY < -3.5) {
+          state.landSquash = Math.min(1, Math.abs(state.velY) / 14);
+          spawnDustPuff(eric.position.x, floorY, eric.position.z, 6);
+          AudioEngine.land();
+        }
         eric.position.y = floorY;
         state.velY = 0;
         state.grounded = true;
@@ -1767,9 +1941,21 @@ function animate() {
   } else {
     beacon.visible = false;
     document.getElementById("interactPrompt").hidden = true;
+    state.vx = 0; state.vz = 0;
   }
 
-  animateCharacterPose(eric, playerMoving, state.isSwimming, dt);
+  animateHumanPhysics(eric, {
+    speed: Math.hypot(state.vx, state.vz),
+    grounded: state.grounded,
+    velY: state.velY,
+    isSwimming: state.isSwimming,
+    landSquash: state.landSquash,
+    bank: state.bankAngle,
+    dt,
+    time: elapsed,
+    emitFootsteps: state.phase === "EXPLORE" && !state.dialogueActive
+  });
+
   heroWarmLight.position.set(eric.position.x, eric.position.y + 2.4, eric.position.z);
   sunLight.position.set(eric.position.x + 18, eric.position.y + 30, eric.position.z + 24);
 
