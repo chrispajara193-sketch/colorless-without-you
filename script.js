@@ -1662,10 +1662,12 @@ function beginOpeningQuarrel() {
 
   startDialogue(
     [
-      { speaker: "Jane", role: "Hurt", text: "You kept talking about your dreams, Eric, and forgot I was standing right next to you." },
-      { speaker: "Eric", role: "You", text: "I'm working hard for both of us, Jane! Why can't you see how stressed I am?" },
-      { speaker: "Jane", role: "", text: "I believed in you when nobody else did. Now I just feel completely alone beside you." },
-      { speaker: "Jane", role: "", text: "I'm going away. Don't bother looking for me." }
+      { speaker: "Jane", role: "Pagod na", text: "Nakakapagod na mag-isip ng solusyon na dapat ikaw mismo yung nakakaisip para sa'tin." },
+      { speaker: "Jane", role: "", text: "Minsan nararamdaman ko na ako na yung tumatayong lalaki sa'ting dalawa. Lahat ng desisyon, ang bagsak sa'kin pa rin." },
+      { speaker: "Eric", role: "Defending", text: "Iniisip ko naman yun, love. Kaya lang yun yung napagkasunduan, wala na akong magawa." },
+      { speaker: "Jane", role: "Hurt", text: "Kaya mong magdesisyon para sa sarili mo, pero pumapayag ka kahit alam mong mahihirapan ka. Akala ko ba para sa'tin 'to?" },
+      { speaker: "Jane", role: "", text: "Nakakapagod na minsan magbuhat mag-isa. Feeling ko kahit alam mong hindi ako okay, hinahayaan mo lang ako hanggang ako na ulit ang kumausap sa'yo." },
+      { speaker: "Jane", role: "", text: "Kaya nakakatamad na minsan magsabi sa'yo. Bahala ka na muna." }
     ],
     () => {
       state.phase = "JANE_LEAVING";
@@ -1692,8 +1694,8 @@ function finishJaneLeaving() {
   }
 
   startDialogue([
-    { speaker: "Eric", role: "Inner Voice", text: "The whole world just turned black and white..." },
-    { speaker: "Eric", role: "Inner Voice", text: "I was wrong. No matter how far she went, I have to find Jane and tell her I'm sorry." }
+    { speaker: "Eric", role: "Realization", text: "Nawalan ng kulay yung buong mundo..." },
+    { speaker: "Eric", role: "", text: "Tama siya. Hindi pwedeng maghintay na naman ako na siya yung unang kumausap. Ako ang lalapit at magbabawi ngayon." }
   ]);
 }
 
@@ -1747,18 +1749,18 @@ function interactWithTarget(target) {
     ]);
   } else if (target.id === "jane" && (state.questStep === 5 || state.questStep === 6)) {
     startDialogue([
-      { speaker: "Jane", role: "Facing the sunset", text: "...Eric? You actually climbed the ridge and swam all the way out here?" },
+      { speaker: "Jane", role: "Looking at the ocean", text: "O, akala ko ba hahayaan mo lang ulit ako hanggang sa ako na naman ang kumausap sa'yo?" },
       {
         speaker: "Eric",
-        role: "Say what you couldn't before",
-        text: "Stand beside Jane and speak from your heart:",
+        role: "Speak sincerely",
+        text: "Stand beside Jane and tell her what you really mean:",
         choices: [
           {
-            label: "1. \"I'm sorry, Jane. No words can describe how sorry I feel. Seeing things from your perspective saddens me.\"",
+            label: "1. 'Sorry love, kung paulit-ulit nalang. Hindi na kita hahayaang magbuhat mag-isa.'",
             onPick: () => triggerSunsetFinale()
           },
           {
-            label: "2. \"My world had no color without you. I'm truly sorry for taking you for granted.\"",
+            label: "2. 'Nakita ko na yung mali ko. Hindi na ako maghihintay sa tahimik kapag hindi ka okay.'",
             onPick: () => triggerSunsetFinale()
           }
         ]
@@ -1775,9 +1777,10 @@ function triggerSunsetFinale() {
 
   startDialogue(
     [
-      { speaker: "Eric", role: "", text: "I brought your scarf and your locket. As long as we hold tight and walk together, I won't ever let go again." },
-      { speaker: "Jane", role: "Smiling with tears", text: "You really went through all of that just to say you're sorry..." },
-      { speaker: "Jane", role: "", text: "Sit down with me, Eric. Look at the sunset." }
+      { speaker: "Eric", role: "", text: "Sorry love, kung paulit-ulit na nawawalan ka ng peace of mind dahil hindi ako nakikinig nang maayos." },
+      { speaker: "Eric", role: "", text: "Hindi mo pinapangunahan yung mga bagay—iniisip mo lang kami. Simula ngayon, ako na yung unang lalapit at gagawa ng paraan." },
+      { speaker: "Jane", role: "Smiling softly", text: "Ayoko lang naman maramdaman na mag-isa ako sa relasyon na 'to, love." },
+      { speaker: "Jane", role: "", text: "Upo ka na dito sa tabi ko. Panoorin natin yung sunset." }
     ],
     () => {
       AudioEngine.colorReturn();
